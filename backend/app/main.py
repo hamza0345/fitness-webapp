@@ -1,14 +1,24 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .database import SessionLocal, engine
 from . import models, schemas, crud
 
-# create tables
+# Create tables
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="FitTrack API")
+app = FastAPI(title="FitTrack API")
 
-# ── Dependency ──────────────────────────────────────────────────────────────
+# ── Allow frontend to talk to backend ──
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Replace with your frontend URL in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Dependency for DB session ──
 def get_db():
     db = SessionLocal()
     try:
@@ -16,7 +26,7 @@ def get_db():
     finally:
         db.close()
 
-# ── Routes ─────────────────────────────────────────────────────────────────
+# ── Routes ──
 @app.get("/")
 def root():
     return {"status": "FitTrack backend is running"}
