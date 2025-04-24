@@ -7,24 +7,25 @@ from .models import Routine
 class RegisterSerializer(serializers.ModelSerializer):
     """
     Creates a new user.
-    We’ll treat the email the student types in as their username.
+    We treat the email the student types in as both username + email.
     """
     email = serializers.EmailField(required=True)
 
     class Meta:
-        model = User
-        fields = ("id", "username", "email", "password")
-        extra_kwargs = {"password": {"write_only": True}}
+        model  = User
+        fields = ("email", "password")          # ← username no longer required
+        extra_kwargs = {
+            "password": {"write_only": True},
+        }
 
     def create(self, validated_data):
-        # username will be the same as email for simplicity
         email = validated_data["email"]
-        user = User.objects.create_user(
-            username=email,
+        return User.objects.create_user(
+            username=email,          # we still store it as username internally
             email=email,
             password=validated_data["password"],
         )
-        return user
+
 
 
 class UserSerializer(serializers.ModelSerializer):
