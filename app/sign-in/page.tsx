@@ -15,10 +15,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Dumbbell, ArrowLeft, Lock, Mail } from "lucide-react";
-import { login } from "@/lib/api";
+import { login as apiLogin } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext"; // <-- NEW
 
 export default function SignInPage() {
   const router = useRouter();
+  const { login: contextLogin } = useAuth(); // <-- grab login from context
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
@@ -43,8 +45,9 @@ export default function SignInPage() {
 
     setIsLoading(true);
     try {
-      await login(formData.email, formData.password);
-      router.push("/routines"); // go to routines page after login
+      const data = await apiLogin(formData.email, formData.password); // { access, refresh }
+      contextLogin(data.access); // <-- update auth context after login
+      router.push("/routines");  // go to routines page after successful login
     } catch (err: any) {
       setErrors({ form: err.message });
     } finally {
@@ -54,7 +57,6 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* header omitted for brevity */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-md mx-auto">
           <Card>
