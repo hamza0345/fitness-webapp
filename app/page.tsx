@@ -5,45 +5,7 @@ import { Dumbbell, LineChart, Camera, ArrowRight, Code, BookOpen, Github } from 
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="bg-green-600 text-white py-6">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-8 w-8" />
-              <h1 className="text-2xl font-bold">BodyBlueprint</h1>
-            </div>
-            <nav className="hidden md:flex gap-6">
-              <Link href="/" className="font-medium hover:underline">
-                Home
-              </Link>
-              <Link href="/routines" className="font-medium hover:underline">
-                My Routines
-              </Link>
-              <Link href="/tracker" className="font-medium hover:underline">
-                Workout Tracker
-              </Link>
-              <Link href="/improve" className="font-medium hover:underline">
-                Improve Program
-              </Link>
-              <Link href="/rep-counter" className="font-medium hover:underline">
-                Rep Counter
-              </Link>
-            </nav>
-            <div className="flex gap-2">
-              <Button variant="outline" className="bg-white text-green-600 hover:bg-green-50">
-                <Link href="/sign-in">Sign In</Link>
-              </Button>
-              <Button variant="default" className="bg-green-700 hover:bg-green-800">
-                <Link href="/register" className="text-white">
-                  Register
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="flex flex-col min-h-screen"> 
       <main className="flex-1">
         {/* Hero Section */}
         <section className="bg-gradient-to-b from-green-600 to-green-500 text-white py-16">

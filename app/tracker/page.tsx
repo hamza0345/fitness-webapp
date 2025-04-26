@@ -47,34 +47,6 @@ export default function TrackerPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-green-600 text-white py-6">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-8 w-8" />
-              <h1 className="text-2xl font-bold">BodyBlueprint</h1>
-            </div>
-            <nav className="hidden md:flex gap-6">
-              <Link href="/" className="font-medium hover:underline">
-                Home
-              </Link>
-              <Link href="/routines" className="font-medium hover:underline">
-                My Routines
-              </Link>
-              <Link href="/tracker" className="font-medium hover:underline">
-                Workout Tracker
-              </Link>
-              <Link href="/improve" className="font-medium hover:underline">
-                Improve Program
-              </Link>
-              <Link href="/rep-counter" className="font-medium hover:underline">
-                Rep Counter
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
-
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <Link href="/" className="flex items-center text-green-600 hover:text-green-700">
