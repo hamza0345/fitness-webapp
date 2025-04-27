@@ -17,6 +17,14 @@ export default function Navbar() {
     router.push("/");  // back to home (or /sign-in if you prefer)
   };
 
+  /* Handle navigation to protected routes */
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (!isLoggedIn) {
+      e.preventDefault();
+      router.push("/register");
+    }
+  };
+
   /* -------------- render -------------- */
   return (
     <header className="bg-green-600 text-white py-4 shadow-md">
@@ -35,24 +43,28 @@ export default function Navbar() {
           <Link
             href="/tracker"
             className={`${pathname === "/tracker" ? "underline" : "hover:underline hover:text-gray-200"}`}
+            onClick={(e) => handleNavClick(e, "/tracker")}
           >
             Tracker
           </Link>
           <Link
             href="/routines"
             className={`${pathname === "/routines" ? "underline" : "hover:underline hover:text-gray-200"}`}
+            onClick={(e) => handleNavClick(e, "/routines")}
           >
             Routines
           </Link>
           <Link
             href="/improve"
             className={`${pathname === "/improve" ? "underline" : "hover:underline hover:text-gray-200"}`}
+            onClick={(e) => handleNavClick(e, "/improve")}
           >
             Improve
           </Link>
           <Link
             href="/rep-counter"
             className={`${pathname === "/rep-counter" ? "underline" : "hover:underline hover:text-gray-200"}`}
+            onClick={(e) => handleNavClick(e, "/rep-counter")}
           >
             Rep&nbsp;Counter
           </Link>
@@ -97,24 +109,28 @@ export default function Navbar() {
         <Link
           href="/tracker"
           className={`${pathname === "/tracker" ? "underline" : "hover:underline hover:text-gray-200"}`}
+          onClick={(e) => handleNavClick(e, "/tracker")}
         >
           Tracker
         </Link>
         <Link
           href="/routines"
           className={`${pathname === "/routines" ? "underline" : "hover:underline hover:text-gray-200"}`}
+          onClick={(e) => handleNavClick(e, "/routines")}
         >
           Routines
         </Link>
         <Link
           href="/improve"
           className={`${pathname === "/improve" ? "underline" : "hover:underline hover:text-gray-200"}`}
+          onClick={(e) => handleNavClick(e, "/improve")}
         >
           Improve
         </Link>
         <Link
           href="/rep-counter"
           className={`${pathname === "/rep-counter" ? "underline" : "hover:underline hover:text-gray-200"}`}
+          onClick={(e) => handleNavClick(e, "/rep-counter")}
         >
           Rep&nbsp;Counter
         </Link>

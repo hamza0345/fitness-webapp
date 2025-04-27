@@ -1,9 +1,26 @@
+"use client";
+
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dumbbell, LineChart, Camera, ArrowRight, Code, BookOpen, Github } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
 
 export default function Home() {
+  const router = useRouter();
+  const { isLoggedIn } = useAuth();
+
+  // Handle navigation to protected routes
+  const handleProtectedNavigation = (e: React.MouseEvent, path: string) => {
+    if (!isLoggedIn) {
+      e.preventDefault();
+      router.push("/register");
+    } else {
+      router.push(path);
+    }
+  };
+  
   return (
     <div className="flex flex-col min-h-screen"> 
       <main className="flex-1">
@@ -50,11 +67,13 @@ export default function Home() {
                   </p>
                 </CardContent>
                 <CardFooter>
-                  <Link href="/routines">
-                    <Button variant="outline" className="w-full">
-                      Explore Routines <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={(e) => handleProtectedNavigation(e, "/routines")}
+                  >
+                    Explore Routines <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </CardFooter>
               </Card>
 
@@ -70,11 +89,13 @@ export default function Home() {
                   <p>Log your workouts and visualize your improvements with detailed charts and statistics.</p>
                 </CardContent>
                 <CardFooter>
-                  <Link href="/tracker">
-                    <Button variant="outline" className="w-full">
-                      Start Tracking <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={(e) => handleProtectedNavigation(e, "/tracker")}
+                  >
+                    Start Tracking <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </CardFooter>
               </Card>
 
@@ -94,11 +115,13 @@ export default function Home() {
                   </p>
                 </CardContent>
                 <CardFooter>
-                  <Link href="/rep-counter">
-                    <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
-                      Try Rep Counter <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="default" 
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={(e) => handleProtectedNavigation(e, "/rep-counter")}
+                  >
+                    Try Rep Counter <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </CardFooter>
               </Card>
             </div>
