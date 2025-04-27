@@ -22,6 +22,7 @@ import {
   FilesetResolver,
   DrawingUtils
 } from "@mediapipe/tasks-vision";
+import useAuthGuard from "@/hooks/useAuthGuard";
 
 /* ---- landmark indices ---- */
 const LEFT_SHOULDER = 11;
@@ -29,6 +30,9 @@ const LEFT_ELBOW = 13;
 const LEFT_WRIST = 15;
 
 export default function RepCounterPage() {
+  // Call useAuthGuard to redirect if user is not authenticated
+  const isAuthenticated = useAuthGuard();
+
   /* ---------- state ---------- */
   const [activeTab, setActiveTab] = useState("live");
   const [isCameraStarted, setIsCameraStarted] = useState(false);

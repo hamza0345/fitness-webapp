@@ -27,6 +27,8 @@ const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 /* ---------- component ---------- */
 
 export default function RoutinesPage() {
+  // Call useAuthGuard to redirect if user is not authenticated
+  const isAuthenticated = useAuthGuard();
   
   const [routines, setRoutines]     = useState<RoutineWithEx[]>([]);
   const [draft, setDraft]           = useState<RoutineWithEx>({
@@ -39,8 +41,11 @@ export default function RoutinesPage() {
 
   /* fetch once ---------------------------------------------------- */
   useEffect(() => {
-    getRoutines().then(setRoutines).catch((e) => setError(e.message));
-  }, []);
+    // Only fetch routines if user is authenticated
+    if (isAuthenticated) {
+      getRoutines().then(setRoutines).catch((e) => setError(e.message));
+    }
+  }, [isAuthenticated]);
 
   /* field-level handlers ------------------------------------------ */
   const handleAddExercise = () =>

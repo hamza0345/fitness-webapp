@@ -11,8 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dumbbell, ArrowLeft, Trash2 } from "lucide-react"
 import { mockRoutines, mockWorkoutHistory } from "@/lib/mock-data"
 import { LineChart } from "@/components/ui/chart"
+import useAuthGuard from "@/hooks/useAuthGuard"
 
 export default function TrackerPage() {
+  // Call useAuthGuard to redirect if user is not authenticated
+  const isAuthenticated = useAuthGuard();
+  
   const [activeWorkout, setActiveWorkout] = useState(null)
   const [workoutHistory, setWorkoutHistory] = useState(mockWorkoutHistory)
 
