@@ -1,6 +1,7 @@
+# backend/api/serializers.py
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Routine
+from .models import Routine, Exercise
 
 
 # ----------  USERS  ----------
@@ -21,11 +22,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         email = validated_data["email"]
         return User.objects.create_user(
-            username=email,          # we still store it as username internally
+            username=email,
             email=email,
             password=validated_data["password"],
         )
-
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -34,11 +34,38 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ("id", "username")
 
 
-# ----------  ROUTINES  ----------
+# ----------  ROUTINES + EXERCISES  ----------
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Exercise
+        fields = ("id", "name", "sets", "reps", "weight", "order")
+
+
 class RoutineSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    exercises = ExerciseSerializer(many=True, required=False)  # <- exercises inside routines
 
     class Meta:
-        model = Routine
-        fields = ("id", "user", "name", "description", "created_at")
+        model  = Routine
+        fields = ("id", "user", "name", "description", "created_at", "exercises")
         read_only_fields = ("id", "created_at", "user")
+
+    # -------- create / update nested exercises ------------
+    def create(self, validated_data):
+        exercises_data = validated_data.pop("exercises", [])
+        routine = Routine.objects.create(**validated_data)
+        for idx, ex in enumerate(exercises_data):
+            Exercise.objects.create(routine=routine, order=idx, **ex)
+        return routine
+
+    def update(self, instance, validated_data):
+        exercises_data = validated_data.pop("exercises", [])
+        instance.name = validated_data.get("name", instance.name)
+        instance.description = validated_data.get("description", instance.description)
+        instance.save()
+
+        # delete old exercises and recreate (simple for now)
+        instance.exercises.all().delete()
+        for idx, ex in enumerate(exercises_data):
+            Exercise.objects.create(routine=instance, order=idx, **ex)
+        return instance

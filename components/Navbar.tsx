@@ -63,7 +63,7 @@ export default function Navbar() {
           {isLoggedIn ? (
             <>
               <span className="hidden sm:inline text-sm">
-                Welcome,&nbsp;<strong>{userEmail}</strong>
+                Welcome
               </span>
               <Button
                 variant="secondary"
