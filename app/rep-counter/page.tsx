@@ -1,732 +1,622 @@
+/* app/rep-counter/page.tsx */
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Camera, Play, Pause, RotateCcw, Info, Loader2 } from "lucide-react"; // Removed Dumbbell as it wasn't used in final UI
 import { Progress } from "@/components/ui/progress";
-import { PoseLandmarker, FilesetResolver, DrawingUtils } from "@mediapipe/tasks-vision";
+import {
+  ArrowLeft,
+  Camera,
+  Play,
+  Pause,
+  RotateCcw,
+  Info,
+  Loader2,
+  AlertCircle,
+  Bug
+} from "lucide-react";
+import {
+  PoseLandmarker,
+  FilesetResolver,
+  DrawingUtils
+} from "@mediapipe/tasks-vision";
 
-// Define landmark indices for clarity (based on Mediapipe Pose documentation)
+/* ---- landmark indices ---- */
 const LEFT_SHOULDER = 11;
 const LEFT_ELBOW = 13;
 const LEFT_WRIST = 15;
 
 export default function RepCounterPage() {
+  /* ---------- state ---------- */
   const [activeTab, setActiveTab] = useState("live");
-  const [isCameraStarted, setIsCameraStarted] = useState(false); // Camera stream active?
-  const [isProcessing, setIsProcessing] = useState(false); // CV processing happening?
-  const [isLoadingModel, setIsLoadingModel] = useState(true); // Loading state for the model
+  const [isCameraStarted, setIsCameraStarted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingModel, setIsLoadingModel] = useState(true);
   const [repCount, setRepCount] = useState(0);
   const [exerciseTime, setExerciseTime] = useState(0);
-  const [formQuality, setFormQuality] = useState(85); // Keep simulated for now
-  const [curlStage, setCurlStage] = useState<"down" | "up" | null>(null); // Track curl stage
-  const [lastAngle, setLastAngle] = useState<number | null>(null); // For display
+  const [formQuality, setFormQuality] = useState(85);
+  const [curlStage, setCurlStage] = useState<"down" | "up" | null>(null);
+  const [lastAngle, setLastAngle] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null); // For drawing landmarks
-  const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const requestRef = useRef<number | null>(null); // For requestAnimationFrame
+  /* ---------- refs ---------- */
+  const videoRef   = useRef<HTMLVideoElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const streamRef  = useRef<MediaStream | null>(null);
+  const timerRef   = useRef<NodeJS.Timeout | null>(null);
+  const requestRef = useRef<number | null>(null);
+
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
-  const drawingUtilsRef = useRef<DrawingUtils | null>(null);
-  let lastVideoTime = -1; // Used to optimize frame processing
+  const drawingUtilsRef   = useRef<DrawingUtils | null>(null);
 
-  // --- Mediapipe Setup ---
+  let lastVideoTime = -1;
+
+  /* ---------- load model on mount ---------- */
   useEffect(() => {
-    const createPoseLandmarker = async () => {
+    (async () => {
       try {
         setIsLoadingModel(true);
         const vision = await FilesetResolver.forVisionTasks(
-          // Path to Mediapipe WASM files - using CDN
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
-        const newPoseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            // Using Google hosted model file
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-tasks/pose_landmarker/pose_landmarker_lite.task",
-            delegate: "GPU", // Use GPU if available
-          },
-          runningMode: "VIDEO", // Process video stream
-          numPoses: 1, // Detect one person
-          minPoseDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-        poseLandmarkerRef.current = newPoseLandmarker;
-
-        // Setup DrawingUtils for the canvas
-        const canvasCtx = canvasRef.current?.getContext("2d");
-        if (canvasCtx) {
-          drawingUtilsRef.current = new DrawingUtils(canvasCtx);
-        } else {
-           console.error("Could not get 2D context from canvas");
-        }
-
-        setIsLoadingModel(false);
-        console.log("Pose Landmarker model loaded successfully.");
-      } catch (error) {
-        console.error("Error loading Pose Landmarker model:", error);
-        // Consider adding user-facing error feedback here
+        poseLandmarkerRef.current = await PoseLandmarker.createFromOptions(
+          vision,
+          {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-tasks/pose_landmarker/pose_landmarker_lite.task",
+              delegate: "GPU"
+            },
+            runningMode: "VIDEO",
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+          }
+        );
+        console.log("Pose Landmarker loaded");
+      } catch (err) {
+        console.error("Model load error:", err);
+      } finally {
         setIsLoadingModel(false);
       }
-    };
-    createPoseLandmarker();
+    })();
 
-    // Cleanup function: runs when component unmounts
     return () => {
-      console.log("Cleaning up RepCounterPage...");
-      stopProcessingAndCamera(); // Stop streams and timers
-      poseLandmarkerRef.current?.close(); // Release model resources
+      stopProcessingAndCamera();
+      poseLandmarkerRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty array means run only once on mount
+  }, []);
 
-  // --- Angle Calculation ---
-  const calculateAngle = (a: { x: number, y: number }, b: { x: number, y: number }, c: { x: number, y: number }): number => {
-    // Calculate angle using atan2, convert to degrees
-    const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-    let angle = Math.abs(radians * 180.0 / Math.PI);
-    // Ensure angle is <= 180 degrees
-    if (angle > 180.0) {
-      angle = 360 - angle;
-    }
+  /* ---------- helpers ---------- */
+  const calculateAngle = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    c: { x: number; y: number }
+  ) => {
+    const radians =
+      Math.atan2(c.y - b.y, c.x - b.x) -
+      Math.atan2(a.y - b.y, a.x - b.x);
+    let angle = Math.abs((radians * 180) / Math.PI);
+    if (angle > 180) angle = 360 - angle;
     return angle;
   };
 
-  // --- Main Processing Loop (using requestAnimationFrame) ---
+  /* ---------- main loop ---------- */
   const predictWebcam = useCallback(() => {
-    // Exit checks
-    if (!isProcessing || !videoRef.current || !poseLandmarkerRef.current || !canvasRef.current || !drawingUtilsRef.current) {
-      // If any required element/state isn't ready, stop the loop for now
-      // It will be restarted by resumeProcessing or startCameraAndProcessing
+    if (
+      !isProcessing ||
+      !videoRef.current ||
+      !poseLandmarkerRef.current ||
+      !canvasRef.current
+    ) {
       requestRef.current = null;
       return;
     }
 
     const video = videoRef.current;
-    const poseLandmarker = poseLandmarkerRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+
+    /* create DrawingUtils lazily when canvas is ready */
+    if (!drawingUtilsRef.current) {
+      const ctx2d = canvas.getContext("2d");
+      if (ctx2d) drawingUtilsRef.current = new DrawingUtils(ctx2d);
+    }
     const drawingUtils = drawingUtilsRef.current;
-
-     if (!ctx) { // Should be caught by initial check, but safety first
-         console.error("Canvas context lost");
-         requestRef.current = null;
-         return;
-     }
-
-    // Match canvas dimensions to video dimensions if they differ
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        console.log(`Canvas resized to: ${canvas.width}x${canvas.height}`);
+    if (!drawingUtils) {
+      requestRef.current = requestAnimationFrame(predictWebcam);
+      return;
     }
 
-    // Process video frame if time has advanced
-    if (video.readyState >= 2 && video.currentTime !== lastVideoTime) { // Check readyState
-      lastVideoTime = video.currentTime;
-      const startTimeMs = performance.now();
-      const results = poseLandmarker.detectForVideo(video, startTimeMs);
+    /* keep canvas size in sync */
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      console.log(`Canvas resized to ${canvas.width}x${canvas.height}`);
+    }
 
-      // Clear canvas before drawing new frame
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw landmarks if detected
-      if (results.landmarks && results.landmarks.length > 0) {
-        const landmarks = results.landmarks[0]; // Get landmarks for the first detected pose
-
-        // Draw the landmarks and connections
-        drawingUtils.drawLandmarks(landmarks, {
-          radius: (data) => DrawingUtils.lerp(data.from!.z, -0.15, 0.1, 5, 1), // Adjust size based on depth
-          color: '#4ade80', // Green dots
-        });
-        drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, {
-          color: '#3b82f6', // Blue lines
-        });
-
-        // --- Rep Counting Logic ---
-        // Check if required landmarks are visible enough
-        if (
-          landmarks[LEFT_SHOULDER] && landmarks[LEFT_ELBOW] && landmarks[LEFT_WRIST] &&
-          landmarks[LEFT_SHOULDER].visibility > 0.5 &&
-          landmarks[LEFT_ELBOW].visibility > 0.5 &&
-          landmarks[LEFT_WRIST].visibility > 0.5
-        ) {
-            const shoulder = landmarks[LEFT_SHOULDER];
-            const elbow = landmarks[LEFT_ELBOW];
-            const wrist = landmarks[LEFT_WRIST];
-
-            // Calculate the elbow angle
-            const angle = calculateAngle(shoulder, elbow, wrist);
-            setLastAngle(angle); // Update state for display
-
-            // Curl counter state machine logic
-            if (angle > 160) { // Arm is extended (down phase)
-              // Only update if not already 'down' to avoid redundant state changes
-              if (curlStage !== "down") {
-                 // console.log("Stage: down");
-                 setCurlStage("down");
+    const ctx = canvas.getContext("2d")!;
+    
+    // Draw the video frame on the canvas first
+    if (video.readyState >= 2) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Only process new frames
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        
+        try {
+          const res = poseLandmarkerRef.current.detectForVideo(
+            video,
+            performance.now()
+          );
+  
+          if (res.landmarks?.length) {
+            const lms = res.landmarks[0];
+            
+            // Draw landmarks and connections
+            drawingUtils.drawLandmarks(lms, {
+              radius: d => DrawingUtils.lerp(d.from!.z, -0.15, 0.1, 5, 1),
+              color: "#4ade80"
+            });
+            drawingUtils.drawConnectors(
+              lms,
+              PoseLandmarker.POSE_CONNECTIONS,
+              { color: "#3b82f6" }
+            );
+  
+            if (
+              lms[LEFT_SHOULDER] &&
+              lms[LEFT_ELBOW] &&
+              lms[LEFT_WRIST] &&
+              lms[LEFT_SHOULDER].visibility! > 0.5 &&
+              lms[LEFT_ELBOW].visibility! > 0.5 &&
+              lms[LEFT_WRIST].visibility! > 0.5
+            ) {
+              const angle = calculateAngle(
+                lms[LEFT_SHOULDER],
+                lms[LEFT_ELBOW],
+                lms[LEFT_WRIST]
+              );
+              setLastAngle(angle);
+  
+              if (angle > 160 && curlStage !== "down") setCurlStage("down");
+              if (angle < 50 && curlStage === "down") {
+                setCurlStage("up");
+                setRepCount(prev => prev + 1);
               }
+            } else {
+              setLastAngle(null);
             }
-            // Check if arm is flexed (up phase) AND was previously in the 'down' state
-            if (angle < 50 && curlStage === 'down') {
-              // console.log("Stage: up, Rep counted!");
-              setCurlStage("up");
-              setRepCount((prev) => prev + 1);
-              // Reset stage quickly? Or wait for extension? Current logic resets on next >160
-            }
-        } else {
-            // Landmarks not clearly visible, reset angle display
-             setLastAngle(null);
+          } else {
+            setLastAngle(null);
+          }
+        } catch (err) {
+          console.error("Error in pose detection:", err);
         }
-
-      } else {
-        // No pose detected in this frame
-        setLastAngle(null);
       }
     }
 
-    // Continue the loop for the next frame if still processing
     if (isProcessing) {
-        requestRef.current = requestAnimationFrame(predictWebcam);
-    } else {
-        requestRef.current = null; // Ensure loop stops if isProcessing becomes false
+      requestRef.current = requestAnimationFrame(predictWebcam);
     }
-  }, [isProcessing, curlStage]); // Dependencies for the callback
+  }, [isProcessing, curlStage, calculateAngle]);
 
-  // --- Control Functions ---
+  /* ---------- camera controls ---------- */
   const startCameraAndProcessing = async () => {
-    if (isLoadingModel || !poseLandmarkerRef.current) {
-        console.log("Model not loaded yet.");
-        // Optionally show a message to the user
-        return;
-    }
-     if (isProcessing || isCameraStarted) {
-         console.log("Camera/Processing already active.");
-         return; // Already running
-     }
-
     try {
-        console.log("Attempting to start camera...");
-        setIsCameraStarted(false); // Reset just in case
-        setIsProcessing(false);
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user", width: 640, height: 480 }, // Request specific size
-            audio: false
-        });
+      setErrorMessage(null);
+      
+      // Check if mediaDevices is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera access is not supported in your browser");
+      }
+      
+      // Request camera access
+      const constraints = { 
+        video: { 
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 } 
+        } 
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
         streamRef.current = stream;
-        console.log("Camera stream acquired.");
-
-        if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            // Wait for metadata to load to get dimensions
-            videoRef.current.onloadedmetadata = () => {
-                console.log("Video metadata loaded.");
-                videoRef.current?.play().then(() => {
-                    console.log("Video playback started.");
-                    setIsCameraStarted(true);
-                    setIsProcessing(true); // Start processing state
-                    resetCounterState(false); // Reset counts but keep camera state
-                    startTimer(); // Start exercise timer
-                    // Kick off the prediction loop
-                    if (!requestRef.current) {
-                         requestRef.current = requestAnimationFrame(predictWebcam);
-                         console.log("Processing loop initiated.");
-                    }
-                }).catch(playError => {
-                    console.error("Error starting video play:", playError);
-                    // Handle autoplay block or other errors
-                    stopProcessingAndCamera(); // Clean up if play fails
-                });
-            };
-             videoRef.current.onerror = (e) => {
-                console.error("Video element error:", e);
-                 stopProcessingAndCamera(); // Clean up on video error
-             };
-        } else {
-             console.error("Video ref is not available.");
-             stream.getTracks().forEach(track => track.stop()); // Release stream if video ref fails
-        }
-    } catch (err) {
-        console.error("Error accessing camera:", err);
-        alert("Could not access camera. Please ensure permission is granted and no other app is using it.");
-        setIsCameraStarted(false);
-        setIsProcessing(false);
+        
+        // Make sure video element is visible and properly displayed
+        videoRef.current.style.display = "block";
+        
+        // Set camera as started
+        setIsCameraStarted(true);
+        
+        // Start processing once camera is ready
+        videoRef.current.onloadeddata = () => {
+          console.log("Video data loaded, starting processing");
+          setIsProcessing(true);
+          requestRef.current = requestAnimationFrame(predictWebcam);
+          startTimer();
+        };
+        
+        // Add error handler for video
+        videoRef.current.onerror = (e) => {
+          console.error("Video error:", e);
+          setErrorMessage("Error with video display. Please refresh and try again.");
+        };
+      } else {
+        throw new Error("Video element not found");
+      }
+    } catch (err: any) {
+      console.error("Error starting camera:", err);
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setErrorMessage("Camera access denied. Please allow camera access in your browser settings.");
+      } else if (err instanceof DOMException && err.name === "NotFoundError") {
+        setErrorMessage("No camera found. Please connect a camera and try again.");
+      } else {
+        setErrorMessage(`Failed to start camera: ${err.message || "Unknown error"}. Please refresh and try again.`);
+      }
     }
   };
 
   const stopProcessingAndCamera = () => {
-    console.log("Stopping processing and camera...");
-    setIsProcessing(false); // Stop the processing loop trigger first
-    setIsCameraStarted(false);
-
+    // Stop the animation frame
     if (requestRef.current) {
       cancelAnimationFrame(requestRef.current);
       requestRef.current = null;
-      console.log("Animation frame cancelled.");
     }
-
+    
+    // Stop the timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
-      console.log("Timer cleared.");
     }
-
-    // Stop camera stream tracks
+    
+    // Stop the camera stream
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      const tracks = streamRef.current.getTracks();
+      tracks.forEach(track => track.stop());
       streamRef.current = null;
-      console.log("Media stream tracks stopped.");
     }
-
-    // Release video source
+    
+    // Reset video element
     if (videoRef.current) {
       videoRef.current.srcObject = null;
-       videoRef.current.onloadedmetadata = null; // Remove listener
-       videoRef.current.onerror = null; // Remove listener
-      console.log("Video source cleared.");
     }
-
-    // Clear the canvas
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (canvas && ctx) {
-        ctx.clearRect(0,0, canvas.width, canvas.height);
-        console.log("Canvas cleared.");
-    }
-    // Reset potentially stuck states
-    setLastAngle(null);
-    setCurlStage(null);
-    console.log("Processing and camera stopped.");
+    
+    setIsProcessing(false);
+    setIsCameraStarted(false);
   };
 
-
   const pauseProcessing = () => {
-    if (!isProcessing) return; // Don't pause if already paused
-    console.log("Pausing processing...");
-    setIsProcessing(false); // This will stop the predictWebcam loop via its internal check
-    // Keep animation frame ref? No, it should null itself out. cancelAnimationFrame just in case:
-    if (requestRef.current) {
+    if (isProcessing) {
+      setIsProcessing(false);
+      
+      if (requestRef.current) {
         cancelAnimationFrame(requestRef.current);
         requestRef.current = null;
+      }
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
-
-    if (timerRef.current) { // Pause timer
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    console.log("Processing paused.");
   };
 
   const resumeProcessing = () => {
-     if (!isCameraStarted || isProcessing) {
-         console.log("Cannot resume: Camera not started or already processing.");
-         return; // Only resume if camera is on and not already processing
-     }
-     console.log("Resuming processing...");
-     setIsProcessing(true);
-     startTimer(); // Restart timer
-
-     // Restart the loop if it's not already running
-     if (!requestRef.current) {
-         console.log("Restarting animation frame loop.");
-        requestRef.current = requestAnimationFrame(predictWebcam);
-     }
-  };
-
-  // Resets counts, angle, stage. Optionally stops camera too.
-  const resetCounterState = (stopCamera = true) => {
-    console.log(`Resetting counter state... ${stopCamera ? 'and stopping camera' : 'keeping camera'}`);
-    if (stopCamera) {
-      stopProcessingAndCamera(); // Full stop and reset
-    } else {
-      // If keeping camera, just pause processing temporarily to reset counts
-      pauseProcessing();
-      // Reset counts immediately
-       setRepCount(0);
-       setExerciseTime(0);
-       setFormQuality(85); // Reset simulated form quality
-       setCurlStage(null);
-       setLastAngle(null);
-       console.log("Counts and state reset.");
-       // Resume processing shortly after state updates apply
-       // Note: This relies on pauseProcessing having stopped the loop and timer
-       setTimeout(() => {
-           if (isCameraStarted && !isProcessing) { // Check state again before resuming
-               resumeProcessing();
-           }
-       }, 50); // Short delay
+    if (isCameraStarted && !isProcessing) {
+      setIsProcessing(true);
+      requestRef.current = requestAnimationFrame(predictWebcam);
+      startTimer();
     }
-
-     // If stopping camera, state reset happens after stopProcessingAndCamera finishes
-     if (stopCamera) {
-        setRepCount(0);
-        setExerciseTime(0);
-        setFormQuality(85);
-        setCurlStage(null);
-        setLastAngle(null);
-     }
   };
 
-  // Starts the exercise timer interval
+  const resetCounterState = () => {
+    setRepCount(0);
+    setExerciseTime(0);
+    setFormQuality(85);
+    setCurlStage(null);
+    setLastAngle(null);
+    
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    if (isProcessing) {
+      startTimer();
+    }
+  };
+
   const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current); // Clear existing timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
     timerRef.current = setInterval(() => {
-      // Use functional update to avoid stale state issues
-      setExerciseTime((prevTime) => prevTime + 1);
+      setExerciseTime(prev => prev + 1);
     }, 1000);
   };
 
-  // --- Helper to format time ---
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  const formatTime = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(
+      2,
+      "0"
+    )}`;
 
-
-  // ---===[ JSX Rendering Starts Here ]===---
+  /* ---------- JSX ---------- */
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-7xl"> {/* Added max-width */}
-      {/* Back Link */}
-      <Link href="/" className="inline-flex items-center text-sm text-blue-600 hover:underline mb-4">
-        <ArrowLeft className="mr-1 h-4 w-4" />
-        Back to Home
-      </Link>
-
+    <div className="container mx-auto p-4 md:p-8 max-w-7xl">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-2">
-        <h1 className="text-3xl font-bold">Rep Counter</h1>
-        <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-sm font-medium flex items-center shrink-0">
-          <Info className="h-4 w-4 mr-1" />
-          Beta Feature (Bicep Curls Only)
+      <header className="mb-6">
+        <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
+          <ArrowLeft size={16} />
+          <span>Back to Home</span>
+        </Link>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Rep Counter</h1>
+            <p className="text-gray-500">Count your bicep curls automatically with computer vision</p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setDebugMode(!debugMode)}
+            className="flex items-center gap-1"
+          >
+            <Bug size={16} />
+            {debugMode ? "Hide Debug" : "Debug Mode"}
+          </Button>
         </div>
-      </div>
-
-      {/* Info Box */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6 border border-gray-200">
-        <p className="text-gray-700 text-sm md:text-base">
-          Use your camera to automatically count bicep curls. Position your <span className="font-medium">entire upper body, especially the working arm (shoulder, elbow, wrist)</span>, clearly in the frame. Good lighting and a side view are recommended.
-        </p>
-        {/* Loading/Error Messages */}
-        {isLoadingModel && (
-          <p className="text-blue-600 mt-2 flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading AI Model...</p>
-        )}
-         {!isLoadingModel && !poseLandmarkerRef.current && (
-          <p className="text-red-600 mt-2">Error loading AI Model. Please refresh the page or check console for details.</p>
-        )}
-      </div>
+      </header>
 
       {/* Tabs */}
-      <Tabs
-        value={activeTab} // Controlled tab state
-        className="w-full"
-        onValueChange={(value) => {
-          console.log("Tab changed to:", value);
-          // Reset completely when switching tabs
-          resetCounterState(true);
-          setActiveTab(value); // Update the active tab state
-        }}
-      >
-        <TabsList className="mb-6">
-          <TabsTrigger value="live" disabled={isLoadingModel}>Live Counter</TabsTrigger>
-          <TabsTrigger value="tutorial">How It Works</TabsTrigger>
-        </TabsList>
+      <div className="flex border-b mb-6">
+        <button
+          className={`px-4 py-2 ${
+            activeTab === "live" ? "border-b-2 border-green-500 text-green-600" : "text-gray-500"
+          }`}
+          onClick={() => setActiveTab("live")}
+        >
+          Live Camera
+        </button>
+        <button
+          className={`px-4 py-2 ${
+            activeTab === "tutorial" ? "border-b-2 border-green-500 text-green-600" : "text-gray-500"
+          }`}
+          onClick={() => setActiveTab("tutorial")}
+        >
+          Tutorial
+        </button>
+      </div>
 
-        {/* --- Live Counter Tab --- */}
-        <TabsContent value="live">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-
-            {/* Camera View Section */}
-            <div className="lg:col-span-2">
-              <Card className="overflow-hidden"> {/* Added overflow hidden */}
-                <CardHeader>
-                  <CardTitle>Bicep Curl Counter</CardTitle>
-                  <CardDescription>Camera View & Pose Detection</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center p-0"> {/* Remove padding */}
-                  {/* Video and Canvas Container - Aspect Ratio Controlled */}
-                  <div className="relative w-full aspect-video bg-gray-100 flex items-center justify-center">
-                    {/* Placeholder/Button when camera is off */}
-                    {!isCameraStarted && !isLoadingModel && (
-                      <div className="flex flex-col items-center gap-4 p-4 text-center z-10">
-                          <div className="bg-white rounded-full p-4 shadow-md">
-                              <Camera className="h-10 w-10 text-green-600" />
-                          </div>
-                          <p className="text-gray-500 text-sm">Enable your camera to start counting reps.</p>
-                          <Button
-                            onClick={startCameraAndProcessing}
-                            disabled={isLoadingModel || !poseLandmarkerRef.current}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                              <Camera className="mr-2 h-4 w-4" /> Start Camera
-                          </Button>
-                      </div>
-                    )}
-                    {/* Loading Indicator */}
-                    {isLoadingModel && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500 z-10">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                        Loading Model...
-                      </div>
-                    )}
-
-                    {/* Video element (source for canvas, can be visually hidden) */}
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      // className="absolute top-0 left-0 w-full h-full object-contain" // Use object-contain
-                      // Use opacity 0 to hide, but keep layout
-                      className={`absolute top-0 left-0 w-full h-full object-contain opacity-0 ${isCameraStarted ? 'opacity-100' : 'opacity-0'}`}
-                       style={{ transform: 'scaleX(-1)' }} // Flip horizontally for mirror effect
-                    />
-                    {/* Canvas for drawing landmarks (visible overlay) */}
-                    <canvas
-                      ref={canvasRef}
-                      className={`absolute top-0 left-0 w-full h-full object-contain ${isCameraStarted ? 'opacity-100' : 'opacity-0'}`} // Use object-contain
-                       style={{ transform: 'scaleX(-1)' }} // Also flip canvas to match video mirror
-                    />
+      {activeTab === "live" ? (
+        <div>
+          {/* Video and canvas container */}
+          <div className="relative aspect-video bg-gray-900 rounded-lg shadow-lg mb-6 overflow-hidden">
+            {isLoadingModel ? (
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-green-500" />
+                  <p className="text-white">Loading pose detection model...</p>
+                </div>
+              </div>
+            ) : !isCameraStarted ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                {errorMessage && (
+                  <div className="bg-red-600/90 text-white p-3 rounded-md mb-4 max-w-md text-center">
+                    <AlertCircle className="h-5 w-5 mx-auto mb-1" />
+                    <p>{errorMessage}</p>
                   </div>
-                </CardContent>
-                <CardFooter className="flex flex-wrap justify-center gap-2 sm:gap-4 pt-4"> {/* Use flex-wrap */}
-                    {/* Control Buttons Logic */}
-                    {!isCameraStarted && !isLoadingModel && (
-                         <Button
-                            onClick={startCameraAndProcessing}
-                            disabled={isLoadingModel || !poseLandmarkerRef.current}
-                            className="flex-1 min-w-[120px] bg-green-600 hover:bg-green-700" // Added min-width
-                         >
-                            <Camera className="mr-2 h-4 w-4" /> Start Camera
-                        </Button>
-                    )}
-                    {isCameraStarted && isProcessing && (
-                        <Button variant="outline" onClick={pauseProcessing} className="flex-1 min-w-[120px]">
-                            <Pause className="mr-2 h-4 w-4" /> Pause
-                        </Button>
-                    )}
-                    {isCameraStarted && !isProcessing && (
-                        <Button onClick={resumeProcessing} className="flex-1 min-w-[120px] bg-green-600 hover:bg-green-700">
-                            <Play className="mr-2 h-4 w-4" /> Resume
-                        </Button>
-                    )}
-                    {isCameraStarted && (
-                        <Button variant="destructive" onClick={() => resetCounterState(true)} className="flex-1 min-w-[120px]">
-                            <RotateCcw className="mr-2 h-4 w-4" /> Stop & Reset
-                        </Button>
-                    )}
-                </CardFooter>
-              </Card>
-            </div> {/* End Camera View Section */}
+                )}
+                <Button
+                  onClick={startCameraAndProcessing}
+                  className="bg-green-600 hover:bg-green-700 z-20"
+                >
+                  <Camera className="mr-2" />
+                  Start Camera
+                </Button>
+              </div>
+            ) : null}
 
-            {/* Statistics Section */}
-            <div className="space-y-6">
-              {/* Rep Stats Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Rep Statistics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Rep Count */}
-                    <div className="text-center">
-                      <div className="text-6xl font-bold text-green-600">{repCount}</div>
-                      <div className="text-sm text-gray-500 mt-1">Reps Counted</div>
-                    </div>
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              autoPlay
+              className={`absolute inset-0 w-full h-full object-contain ${debugMode ? 'opacity-100 z-10' : 'opacity-100'}`}
+              style={{ transform: "scaleX(-1)" }}
+            />
+            <canvas
+              ref={canvasRef}
+              className={`absolute inset-0 w-full h-full object-contain ${debugMode ? 'opacity-50 z-20' : ''}`}
+              style={{ transform: "scaleX(-1)" }}
+            />
 
-                    {/* Detailed Stats */}
-                    <div className="space-y-4">
-                      {/* Time */}
-                      <div>
-                        <div className="flex justify-between mb-1 text-sm">
-                          <span className="font-medium text-gray-600">Exercise Time</span>
-                          <span className="font-medium">{formatTime(exerciseTime)}</span>
-                        </div>
-                      </div>
-                      {/* Angle Display */}
-                       <div>
-                        <div className="flex justify-between mb-1 text-sm">
-                          <span className="font-medium text-gray-600">Elbow Angle</span>
-                          <span className="font-medium text-blue-600">
-                            {lastAngle !== null ? `${lastAngle.toFixed(0)}°` : 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                      {/* Stage Display */}
-                       <div>
-                        <div className="flex justify-between mb-1 text-sm">
-                          <span className="font-medium text-gray-600">Curl Stage</span>
-                          <span className="font-medium capitalize text-blue-600">
-                            {curlStage ?? 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                      {/* Form Quality (Simulated) */}
-                      <div>
-                        <div className="flex justify-between mb-1 text-sm">
-                          <span className="font-medium text-gray-600">Form Quality (Simulated)</span>
-                          <span className="font-medium">{formQuality}%</span>
-                        </div>
-                        <Progress value={formQuality} className="h-2" />
-                      </div>
-                      {/* Average Speed */}
-                      <div>
-                        <div className="flex justify-between mb-1 text-sm">
-                          <span className="font-medium text-gray-600">Average Speed</span>
-                          <span className="font-medium">
-                            {repCount > 0 ? (exerciseTime / repCount).toFixed(1) : "0.0"} sec/rep
-                          </span>
-                        </div>
-                      </div>
-                    </div> {/* End Detailed Stats */}
-                  </div>
-                </CardContent>
-              </Card> {/* End Rep Stats Card */}
+            {/* Overlay for angle and stage */}
+            {lastAngle !== null && (
+              <div className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded z-30">
+                Angle: {Math.round(lastAngle)}°
+              </div>
+            )}
+            {curlStage && (
+              <div className="absolute bottom-2 left-2 bg-green-600/80 text-white px-3 py-1 rounded-full z-30">
+                {curlStage === "up" ? "UP" : "DOWN"}
+              </div>
+            )}
+          </div>
 
-              {/* Tips Card (Using original tips) */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tips for Accurate Counting</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm text-gray-600">
-                    <li className="flex items-start">
-                      <span className="bg-green-100 text-green-700 rounded-full w-5 h-5 flex items-center justify-center mr-2 flex-shrink-0 font-semibold">1</span>
-                      <span>Position your <span className="font-medium">full upper body</span> within the camera frame.</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="bg-green-100 text-green-700 rounded-full w-5 h-5 flex items-center justify-center mr-2 flex-shrink-0 font-semibold">2</span>
-                      <span>Ensure <span className="font-medium">good, consistent lighting</span> on your body. Avoid backlighting.</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="bg-green-100 text-green-700 rounded-full w-5 h-5 flex items-center justify-center mr-2 flex-shrink-0 font-semibold">3</span>
-                      <span>Perform <span className="font-medium">complete range of motion</span> for each rep (fully extend and flex).</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="bg-green-100 text-green-700 rounded-full w-5 h-5 flex items-center justify-center mr-2 flex-shrink-0 font-semibold">4</span>
-                      <span>A <span className="font-medium">side view</span> often works best for tracking the elbow angle.</span>
-                    </li>
-                     <li className="flex items-start">
-                      <span className="bg-green-100 text-green-700 rounded-full w-5 h-5 flex items-center justify-center mr-2 flex-shrink-0 font-semibold">5</span>
-                      <span>Wear clothing that contrasts with the background if possible.</span>
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card> {/* End Tips Card */}
-            </div> {/* End Statistics Section */}
-          </div> {/* End Grid */}
-        </TabsContent> {/* End Live Counter Tab */}
+          {/* Debug info */}
+          {debugMode && (
+            <Card className="mb-6 bg-gray-100">
+              <CardHeader className="py-2">
+                <CardTitle className="text-sm">Debug Information</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                <p>Camera Started: {isCameraStarted ? 'Yes' : 'No'}</p>
+                <p>Processing: {isProcessing ? 'Yes' : 'No'}</p>
+                <p>Model Loaded: {!isLoadingModel ? 'Yes' : 'No'}</p>
+                <p>Video Opacity: {debugMode ? '100%' : '100%'}</p>
+                <p>Canvas Opacity: {debugMode ? '50%' : '100%'}</p>
+                <p>Last Angle: {lastAngle !== null ? Math.round(lastAngle) : 'N/A'}</p>
+                <p>Curl Stage: {curlStage || 'N/A'}</p>
+              </CardContent>
+            </Card>
+          )}
 
+          {/* Controls */}
+          <div className="flex flex-wrap gap-3 mb-6 justify-center">
+            {isCameraStarted && (
+              <>
+                {isProcessing ? (
+                  <Button variant="outline" onClick={pauseProcessing}>
+                    <Pause className="mr-2" />
+                    Pause
+                  </Button>
+                ) : (
+                  <Button onClick={resumeProcessing}>
+                    <Play className="mr-2" />
+                    Resume
+                  </Button>
+                )}
+                <Button variant="outline" onClick={resetCounterState}>
+                  <RotateCcw className="mr-2" />
+                  Reset
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={stopProcessingAndCamera}
+                >
+                  Stop Camera
+                </Button>
+              </>
+            )}
+          </div>
 
-        {/* --- Tutorial Tab (Using original structure/content) --- */}
-        <TabsContent value="tutorial">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* How It Works Card */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>How the Rep Counter Works (Web Version)</CardTitle>
-                        <CardDescription>Using Mediapipe directly in your browser</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                    <div className="space-y-6">
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <h3 className="font-medium text-green-800 mb-2">In-Browser Computer Vision</h3>
-                        <p className="text-sm text-gray-600">
-                            This rep counter uses Google's Mediapipe (<code className="text-xs bg-gray-200 px-1 rounded">@mediapipe/tasks-vision</code>) library, which runs directly in your web browser using WebAssembly and JavaScript. It processes the video feed from your camera in real-time without sending data to a server.
-                        </p>
-                        </div>
+          {/* Statistics and feedback */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Reps Counted</CardTitle>
+                <CardDescription>Total bicep curls</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{repCount}</div>
+              </CardContent>
+            </Card>
 
-                        <div className="space-y-4">
-                        <h3 className="font-medium">The Process:</h3>
-                        <div className="flex gap-4 items-start">
-                            <div className="bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 font-mono text-sm">1</div>
-                            <div>
-                            <h4 className="font-medium">Pose Detection</h4>
-                            <p className="text-sm text-gray-500">Mediapipe identifies key body points (landmarks) like shoulders, elbows, and wrists from the video frames.</p>
-                            </div>
-                        </div>
-                         <div className="flex gap-4 items-start">
-                            <div className="bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 font-mono text-sm">2</div>
-                            <div>
-                            <h4 className="font-medium">Angle Calculation</h4>
-                            <p className="text-sm text-gray-500">The angle of the elbow joint (between shoulder, elbow, and wrist) is calculated using the landmark coordinates.</p>
-                            </div>
-                        </div>
-                         <div className="flex gap-4 items-start">
-                           <div className="bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 font-mono text-sm">3</div>
-                            <div>
-                            <h4 className="font-medium">Rep Counting Logic</h4>
-                            <p className="text-sm text-gray-500">A state machine tracks the angle. When the arm goes from extended (large angle: ~160°+) to flexed (small angle: ~50°-), a rep is counted.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-4 items-start">
-                            <div className="bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 font-mono text-sm">4</div>
-                            <div>
-                            <h4 className="font-medium">Visualization</h4>
-                            <p className="text-sm text-gray-500">The detected landmarks and connections are drawn onto a canvas overlaying the video feed for visual feedback.</p>
-                            </div>
-                        </div>
-                        </div>
-                    </div>
-                    </CardContent>
-                </Card> {/* End How It Works Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Time</CardTitle>
+                <CardDescription>Duration of exercise</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold">{formatTime(exerciseTime)}</div>
+              </CardContent>
+            </Card>
 
-                {/* Future Development Card (Using original content) */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Future Development</CardTitle>
-                        <CardDescription>What's coming next for our rep counter technology</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-6">
-                            <p className="text-sm text-gray-700">
-                            Our rep counter is currently in beta and supports bicep curls only. We're actively developing
-                            support for additional exercises and features:
-                            </p>
+            <Card>
+              <CardHeader>
+                <CardTitle>Form Quality</CardTitle>
+                <CardDescription>Estimated quality of movement</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Progress value={formQuality} className="flex-1" />
+                  <span className="font-bold">{formQuality}%</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="bg-gray-50 border rounded-lg p-3">
-                                    <h4 className="font-medium text-sm text-green-700">Squat Detection</h4>
-                                    <p className="text-xs text-gray-500">Coming soon</p>
-                                </div>
-                                <div className="bg-gray-50 border rounded-lg p-3">
-                                    <h4 className="font-medium text-sm text-green-700">Push-up Counting</h4>
-                                    <p className="text-xs text-gray-500">Coming soon</p>
-                                </div>
-                                <div className="bg-gray-50 border rounded-lg p-3">
-                                    <h4 className="font-medium text-sm text-green-700">Form Correction</h4>
-                                    <p className="text-xs text-gray-500">Real-time feedback on exercise form</p>
-                                </div>
-                                <div className="bg-gray-50 border rounded-lg p-3">
-                                    <h4 className="font-medium text-sm text-green-700">Workout Recording</h4>
-                                    <p className="text-xs text-gray-500">Save and review your exercise sessions</p>
-                                </div>
-                            </div>
-
-                            {/* Adjusted technical description for web */}
-                            <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-                            <h4 className="font-medium text-blue-800 mb-2">Technical Implementation (Web)</h4>
-                            <p className="text-sm text-blue-700">
-                                This feature uses the Mediapipe Tasks Vision library for web, running pose estimation models (like PoseLandmarker) directly in the browser via JavaScript and WebAssembly. Custom logic analyzes joint angles from the detected landmarks to count reps.
-                            </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                    <CardFooter>
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setActiveTab("live")} disabled={isLoadingModel}>
-                            <Play className="mr-2 h-4 w-4" />
-                            Try the Rep Counter
-                        </Button>
-                    </CardFooter>
-                </Card> {/* End Future Development Card */}
-            </div> {/* End Tutorial Grid */}
-        </TabsContent> {/* End Tutorial Tab */}
-
-      </Tabs> {/* End Tabs Component */}
-    </div> // End Container div
-  ); // End Return Statement
-} // End RepCounterPage Component
+          {/* Tips */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Info className="text-blue-500" />
+                Tips for Better Detection
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Stand with your left side facing the camera</li>
+                <li>Ensure good lighting so your body is clearly visible</li>
+                <li>Keep your elbow at a fixed position during curls</li>
+                <li>Move slowly and deliberately for accurate counting</li>
+                <li>Wear contrasting clothes to your background</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div>
+          {/* Tutorial content */}
+          <Card>
+            <CardHeader>
+              <CardTitle>How to Use the Rep Counter</CardTitle>
+              <CardDescription>
+                Follow these steps to start counting your reps with computer vision
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-semibold">1. Prepare Your Space</h3>
+                <p>
+                  Find a well-lit area with enough space to perform bicep curls.
+                  Make sure there's a clear background and good contrast between
+                  you and the background.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-semibold">2. Position Your Device</h3>
+                <p>
+                  Place your device so that your entire left side is visible,
+                  with focus on your arm. Stand approximately 4-6 feet away from
+                  the camera.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-semibold">3. Start the Camera</h3>
+                <p>
+                  Click "Start Camera" and grant permission for your browser to
+                  access your camera. The AI model will load (this may take a few
+                  seconds).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-semibold">4. Begin Your Exercise</h3>
+                <p>
+                  Stand with your left side facing the camera. Begin performing
+                  bicep curls at a moderate pace. The system will automatically
+                  count when you complete a full curl.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-semibold">5. Check Your Form</h3>
+                <p>
+                  The system provides feedback on your form quality. Try to
+                  maintain good form throughout your exercise for more accurate
+                  counting.
+                </p>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button
+                onClick={() => setActiveTab("live")}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                Start Using the Rep Counter
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
