@@ -1,5 +1,5 @@
 "use client";
-
+import useAuthGuard from "@/hooks/useAuthGuard";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 /* ---------- component ---------- */
 
 export default function RoutinesPage() {
+  
   const [routines, setRoutines]     = useState<RoutineWithEx[]>([]);
   const [draft, setDraft]           = useState<RoutineWithEx>({
     name: "",
