@@ -10,16 +10,6 @@ import { useAuth } from "@/context/AuthContext"
 export default function Home() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
-
-  // Handle navigation to protected routes
-  const handleProtectedNavigation = (e: React.MouseEvent, path: string) => {
-    if (!isLoggedIn) {
-      e.preventDefault();
-      router.push("/register");
-    } else {
-      router.push(path);
-    }
-  };
   
   return (
     <div className="flex flex-col min-h-screen"> 
@@ -67,13 +57,11 @@ export default function Home() {
                   </p>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={(e) => handleProtectedNavigation(e, "/routines")}
-                  >
-                    Explore Routines <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <Link href="/routines" className="w-full">
+                    <Button variant="outline" className="w-full">
+                      Explore Routines <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
 
@@ -89,13 +77,11 @@ export default function Home() {
                   <p>Log your workouts and visualize your improvements with detailed charts and statistics.</p>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={(e) => handleProtectedNavigation(e, "/tracker")}
-                  >
-                    Start Tracking <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <Link href="/tracker" className="w-full">
+                    <Button variant="outline" className="w-full">
+                      Start Tracking <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
 
@@ -115,13 +101,11 @@ export default function Home() {
                   </p>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    variant="default" 
-                    className="w-full bg-green-600 hover:bg-green-700"
-                    onClick={(e) => handleProtectedNavigation(e, "/rep-counter")}
-                  >
-                    Try Rep Counter <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <Link href="/rep-counter" className="w-full">
+                    <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
+                      Try Rep Counter <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
             </div>

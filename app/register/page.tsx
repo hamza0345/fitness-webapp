@@ -148,7 +148,14 @@ export default function RegisterPage() {
                 </Button>
               </form>
             </CardContent>
-            <CardFooter />
+            <CardFooter>
+              <div className="w-full text-center">
+                <p className="text-sm text-gray-600 mb-2">Already have an account?</p>
+                <Button variant="outline" className="w-full" onClick={() => router.push("/sign-in")}>
+                  Sign in
+                </Button>
+              </div>
+            </CardFooter>
           </Card>
         </div>
       </main>

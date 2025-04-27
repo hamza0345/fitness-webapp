@@ -16,32 +16,28 @@ const publicRoutes = [
   '/register',
 ]
 
+// This is a server-side middleware, but our authentication uses localStorage which is client-side only.
+// We need to rely on client-side protection for routes since middleware can't access localStorage.
+// This middleware will be limited to checking cookies only.
 export function middleware(request: NextRequest) {
-  // Get token from cookies
-  const token = request.cookies.get('access')?.value
-
   // Get the path from the URL
   const path = request.nextUrl.pathname
-
-  // If trying to access a protected route without being logged in, redirect to register page
-  if (protectedRoutes.some(route => path.startsWith(route)) && !token) {
-    const url = new URL('/register', request.url)
-    return NextResponse.redirect(url)
+  
+  // For APIs, we can check the token in the Authorization header
+  if (path.startsWith('/api/')) {
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   return NextResponse.next()
 }
 
-// Configure the middleware to run on all routes
+// Configure the middleware to run on API routes only
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/api/:path*'
   ],
 } 
