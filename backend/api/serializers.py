@@ -55,7 +55,11 @@ class RoutineSerializer(serializers.ModelSerializer):
         exercises_data = validated_data.pop("exercises", [])
         routine = Routine.objects.create(**validated_data)
         for idx, ex in enumerate(exercises_data):
-            Exercise.objects.create(routine=routine, order=idx, **ex)
+            # Remove order from ex if it exists to avoid duplicate parameter
+            ex_data = ex.copy()
+            if 'order' in ex_data:
+                ex_data.pop('order')
+            Exercise.objects.create(routine=routine, order=idx, **ex_data)
         return routine
 
     def update(self, instance, validated_data):
@@ -67,5 +71,9 @@ class RoutineSerializer(serializers.ModelSerializer):
         # delete old exercises and recreate (simple for now)
         instance.exercises.all().delete()
         for idx, ex in enumerate(exercises_data):
-            Exercise.objects.create(routine=instance, order=idx, **ex)
+            # Remove order from ex if it exists to avoid duplicate parameter
+            ex_data = ex.copy()
+            if 'order' in ex_data:
+                ex_data.pop('order')
+            Exercise.objects.create(routine=instance, order=idx, **ex_data)
         return instance
