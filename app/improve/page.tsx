@@ -15,8 +15,6 @@ import { useToast } from "@/hooks/use-toast"; // Import useToast
 const FOCUS_OPTIONS = [
   { value: "hypertrophy", label: "Hypertrophy (Muscle Growth)" },
   { value: "powerlifting", label: "Powerlifting (Max Strength)" },
-  { value: "general_fitness", label: "General Fitness & Health" },
-  { value: "injury_prevention", label: "Injury Prevention Focus" },
 ];
 
 export default function ImproveProgramPage() {
@@ -31,7 +29,7 @@ export default function ImproveProgramPage() {
 
   // User Preferences State
   const [preferences, setPreferences] = useState<{ focus: string }>({
-    focus: FOCUS_OPTIONS[2].value, // Default to General Fitness
+    focus: FOCUS_OPTIONS[0].value, // Default to General Fitness
   });
 
   const { toast } = useToast();

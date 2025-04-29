@@ -94,6 +94,12 @@ class PredefinedExercise(models.Model):
         ordering = ['name']
 
 
+# backend/api/models.py
+# ... imports ...
+
+# backend/api/models.py
+# ... (other imports and models) ...
+
 class ImprovementRule(models.Model):
     """ Defines rules for suggesting exercise improvements """
     ACTION_CHOICES = [
@@ -104,21 +110,23 @@ class ImprovementRule(models.Model):
     PREFERENCE_CHOICES = [
         ('hypertrophy', 'Hypertrophy'),
         ('powerlifting', 'Powerlifting'),
-        ('general_fitness', 'General Fitness'),
-        ('injury_prevention', 'Injury Prevention'),
-        ('all', 'All'), # Applicable regardless of preference
+        # ('general_fitness', 'General Fitness'), # Keep commented/removed if desired
+        # ('injury_prevention', 'Injury Prevention'), # Keep commented/removed if desired
+        ('all', 'All'),
     ]
 
     trigger_exercise = models.ForeignKey(
         PredefinedExercise,
-        on_delete=models.CASCADE,
+        # --- ADD on_delete HERE ---
+        on_delete=models.CASCADE, # If the trigger exercise is deleted, delete this rule too.
         related_name='trigger_rules',
         help_text="The exercise in the user's routine that triggers this suggestion."
     )
     suggested_exercise = models.ForeignKey(
         PredefinedExercise,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
+        # --- ADD on_delete HERE ---
+        on_delete=models.SET_NULL, # If suggested exercise is deleted, set this field to Null.
+        null=True, blank=True,     # Required when using models.SET_NULL
         related_name='suggestion_rules',
         help_text="The exercise recommended as a replacement or addition (null if modifying technique)."
     )
@@ -137,6 +145,7 @@ class ImprovementRule(models.Model):
     )
 
     def __str__(self):
+        # ... (keep existing __str__ method) ...
         if self.action_type == 'replace':
             return f"If doing {self.trigger_exercise}, consider replacing with {self.suggested_exercise} for {self.preference_focus}"
         elif self.action_type == 'add':
@@ -144,7 +153,9 @@ class ImprovementRule(models.Model):
         else: # modify_technique
             return f"Consider modifying technique for {self.trigger_exercise} for {self.preference_focus}"
 
+
     class Meta:
         ordering = ['trigger_exercise__name']
-        # Ensure a rule is somewhat unique based on trigger, suggestion, preference, and action
         unique_together = [['trigger_exercise', 'suggested_exercise', 'preference_focus', 'action_type']]
+
+# ... (rest of models.py) ...
