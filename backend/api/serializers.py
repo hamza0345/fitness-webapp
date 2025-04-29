@@ -1,7 +1,7 @@
 # backend/api/serializers.py
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Routine, Exercise
+from .models import Routine, Exercise, WorkoutSession, WorkoutExercise, WorkoutSet, NutritionEntry
 
 
 # ----------  USERS  ----------
@@ -77,3 +77,64 @@ class RoutineSerializer(serializers.ModelSerializer):
                 ex_data.pop('order')
             Exercise.objects.create(routine=instance, order=idx, **ex_data)
         return instance
+
+
+# ----------  WORKOUT TRACKING  ----------
+class WorkoutSetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkoutSet
+        fields = ('id', 'weight', 'reps', 'set_number')
+
+
+class WorkoutExerciseSerializer(serializers.ModelSerializer):
+    sets = WorkoutSetSerializer(many=True, required=False)
+    
+    class Meta:
+        model = WorkoutExercise
+        fields = ('id', 'name', 'order', 'sets')
+    
+    def create(self, validated_data):
+        sets_data = validated_data.pop('sets', [])
+        exercise = WorkoutExercise.objects.create(**validated_data)
+        
+        for set_data in sets_data:
+            WorkoutSet.objects.create(exercise=exercise, **set_data)
+        
+        return exercise
+
+
+class WorkoutSessionSerializer(serializers.ModelSerializer):
+    exercises = WorkoutExerciseSerializer(many=True, required=False)
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = WorkoutSession
+        fields = ('id', 'user', 'routine', 'name', 'date', 'exercises')
+        read_only_fields = ('id', 'date', 'user')
+    
+    def create(self, validated_data):
+        exercises_data = validated_data.pop('exercises', [])
+        workout = WorkoutSession.objects.create(**validated_data)
+        
+        for idx, exercise_data in enumerate(exercises_data):
+            sets_data = exercise_data.pop('sets', [])
+            exercise = WorkoutExercise.objects.create(workout_session=workout, order=idx, **exercise_data)
+            
+            for set_idx, set_data in enumerate(sets_data):
+                WorkoutSet.objects.create(
+                    exercise=exercise,
+                    set_number=set_data.get('set_number', set_idx + 1),
+                    **{k: v for k, v in set_data.items() if k != 'set_number'}
+                )
+        
+        return workout
+
+
+# ----------  NUTRITION TRACKING  ----------
+class NutritionEntrySerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = NutritionEntry
+        fields = ('id', 'user', 'date', 'calories', 'protein', 'notes')
+        read_only_fields = ('id', 'user')
