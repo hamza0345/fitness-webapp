@@ -7,8 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dumbbell, ArrowLeft, Trash2, Calendar } from "lucide-react"
+import { ArrowLeft, Trash2, Calendar, Plus } from "lucide-react"
 import { format } from "date-fns"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
@@ -27,6 +26,13 @@ import {
   NutritionEntry
 } from "@/lib/api"
 
+// New interface for tracking food items
+interface FoodItem {
+  name: string;
+  calories: number;
+  protein: number;
+}
+
 export default function TrackerPage() {
   // Call useAuthGuard to redirect if user is not authenticated
   const isAuthenticated = useAuthGuard();
@@ -44,12 +50,24 @@ export default function TrackerPage() {
     nutrition: true,
   })
   const [nutritionEntries, setNutritionEntries] = useState<NutritionEntry[]>([])
-  const [newNutrition, setNewNutrition] = useState<NutritionEntry>({
-    date: format(new Date(), 'yyyy-MM-dd'),
+  
+  // New state for simplified nutrition tracking
+  const [todayFoods, setTodayFoods] = useState<FoodItem[]>([])
+  const [newFood, setNewFood] = useState<FoodItem>({
+    name: '',
     calories: 0,
-    protein: 0,
-    notes: ''
+    protein: 0
   })
+  const [todayTotals, setTodayTotals] = useState({
+    calories: 0,
+    protein: 0
+  })
+  const [nutritionHistory, setNutritionHistory] = useState<{
+    date: string;
+    calories: number;
+    protein: number;
+    foods: FoodItem[];
+  }[]>([])
   
   // Fetch data
   useEffect(() => {
@@ -82,6 +100,11 @@ export default function TrackerPage() {
         setLoading(prev => ({ ...prev, nutrition: true }));
         const nutritionData = await getNutritionEntries();
         setNutritionEntries(nutritionData);
+        
+        // Process nutrition data for the new simplified view
+        if (nutritionData && nutritionData.length > 0) {
+          processNutritionHistory(nutritionData);
+        }
       } catch (error) {
         console.error("Failed to fetch nutrition entries:", error);
         toast.error("Failed to load nutrition data");
@@ -93,16 +116,85 @@ export default function TrackerPage() {
     fetchData();
   }, [isAuthenticated]);
   
+  // Process nutrition data to create history view and today's data
+  const processNutritionHistory = (entries: NutritionEntry[]) => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    
+    // Find today's entry if exists
+    const todayEntry = entries.find(entry => entry.date === today);
+    
+    if (todayEntry && todayEntry.notes) {
+      try {
+        // Parse the notes field which stores our food items as JSON
+        const foodItems: FoodItem[] = JSON.parse(todayEntry.notes);
+        setTodayFoods(foodItems);
+        
+        // Calculate today's totals
+        const totals = foodItems.reduce((acc, food) => ({
+          calories: acc.calories + food.calories,
+          protein: acc.protein + food.protein
+        }), { calories: 0, protein: 0 });
+        
+        setTodayTotals(totals);
+      } catch (error) {
+        console.error("Error parsing food items:", error);
+        setTodayFoods([]);
+      }
+    } else {
+      setTodayFoods([]);
+      setTodayTotals({ calories: 0, protein: 0 });
+    }
+    
+    // Build 7-day history
+    const last7Days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      last7Days.push(format(date, 'yyyy-MM-dd'));
+    }
+    
+    const history = last7Days.map(date => {
+      const entry = entries.find(e => e.date === date);
+      
+      if (entry) {
+        let foods: FoodItem[] = [];
+        try {
+          foods = entry.notes ? JSON.parse(entry.notes) : [];
+        } catch {
+          foods = [];
+        }
+        
+        return {
+          date,
+          calories: entry.calories,
+          protein: entry.protein,
+          foods
+        };
+      }
+      
+      return {
+        date,
+        calories: 0,
+        protein: 0,
+        foods: []
+      };
+    });
+    
+    setNutritionHistory(history);
+  };
+  
   // Start a new workout from a routine
   const startWorkout = (routine: RoutineWithEx) => {
+    if (!routine || !routine.exercises) return;
+    
     const workout: WorkoutSession = {
-      routine: routine.id,
-      name: routine.name,
+      routine: routine.id || undefined,
+      name: routine.name || "New Workout",
       exercises: routine.exercises.map(ex => ({
-        name: ex.name,
-        sets: Array(ex.sets).fill().map((_, setIdx) => ({
-          weight: ex.weight,
-          reps: ex.reps,
+        name: ex.name || "",
+        sets: Array.from({ length: ex.sets || 1 }).map((_, setIdx) => ({
+          weight: ex.weight || 0,
+          reps: ex.reps || 0,
           set_number: setIdx + 1,
         }))
       }))
@@ -142,45 +234,122 @@ export default function TrackerPage() {
       toast.error("Failed to delete workout");
     }
   };
-  
-  // Handle nutrition form changes
-  const handleNutritionChange = (field: keyof NutritionEntry, value: any) => {
-    setNewNutrition({ ...newNutrition, [field]: value });
+
+  // Handle food input changes
+  const handleFoodChange = (field: keyof FoodItem, value: any) => {
+    setNewFood({ ...newFood, [field]: value });
   };
   
-  // Submit new nutrition entry
-  const handleNutritionSubmit = async () => {
+  // Add a new food item to today's list
+  const addFoodItem = async () => {
+    if (!newFood.name || newFood.calories <= 0) {
+      toast.error("Please enter a food name and calories");
+      return;
+    }
+    
+    // Add to today's foods
+    const updatedFoods = [...todayFoods, newFood];
+    setTodayFoods(updatedFoods);
+    
+    // Update today's totals
+    const newTotals = {
+      calories: todayTotals.calories + newFood.calories,
+      protein: todayTotals.protein + newFood.protein
+    };
+    setTodayTotals(newTotals);
+    
+    // Save to backend
     try {
       setLoading(prev => ({ ...prev, nutrition: true }));
-      const savedEntry = await createNutritionEntry(newNutrition);
-      setNutritionEntries([savedEntry, ...nutritionEntries]);
-      // Reset form
-      setNewNutrition({
-        date: format(new Date(), 'yyyy-MM-dd'),
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const existingEntry = nutritionEntries.find(entry => entry.date === today);
+      
+      const nutritionData: NutritionEntry = {
+        date: today,
+        calories: newTotals.calories,
+        protein: newTotals.protein,
+        notes: JSON.stringify(updatedFoods)
+      };
+      
+      if (existingEntry && existingEntry.id) {
+        // Update existing entry
+        await updateNutritionEntry(existingEntry.id, nutritionData);
+        
+        // Update local state
+        const updatedEntries = nutritionEntries.map(entry => 
+          entry.id === existingEntry.id ? { ...nutritionData, id: existingEntry.id } : entry
+        );
+        setNutritionEntries(updatedEntries);
+        processNutritionHistory(updatedEntries);
+      } else {
+        // Create new entry
+        const savedEntry = await createNutritionEntry(nutritionData);
+        const updatedEntries = [savedEntry, ...nutritionEntries];
+        setNutritionEntries(updatedEntries);
+        processNutritionHistory(updatedEntries);
+      }
+      
+      // Reset new food form
+      setNewFood({
+        name: '',
         calories: 0,
-        protein: 0,
-        notes: ''
+        protein: 0
       });
-      toast.success("Nutrition entry saved");
+      
+      toast.success("Food added successfully");
     } catch (error) {
       console.error("Failed to save nutrition entry:", error);
-      toast.error("Failed to save nutrition entry");
+      toast.error("Failed to save food item");
     } finally {
       setLoading(prev => ({ ...prev, nutrition: false }));
     }
   };
   
-  // Delete nutrition entry
-  const handleDeleteNutrition = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this nutrition entry?")) return;
+  // Delete a food item from today
+  const deleteFoodItem = async (index: number) => {
+    const updatedFoods = todayFoods.filter((_, i) => i !== index);
     
+    // Recalculate totals
+    const newTotals = updatedFoods.reduce((acc, food) => ({
+      calories: acc.calories + food.calories,
+      protein: acc.protein + food.protein
+    }), { calories: 0, protein: 0 });
+    
+    setTodayFoods(updatedFoods);
+    setTodayTotals(newTotals);
+    
+    // Save to backend
     try {
-      await deleteNutritionEntry(id);
-      setNutritionEntries(nutritionEntries.filter(entry => entry.id !== id));
-      toast.success("Nutrition entry deleted");
+      setLoading(prev => ({ ...prev, nutrition: true }));
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const existingEntry = nutritionEntries.find(entry => entry.date === today);
+      
+      if (existingEntry && existingEntry.id) {
+        const nutritionData: NutritionEntry = {
+          date: today,
+          calories: newTotals.calories,
+          protein: newTotals.protein,
+          notes: JSON.stringify(updatedFoods)
+        };
+        
+        await updateNutritionEntry(existingEntry.id, nutritionData);
+        
+        // Update local state
+        const updatedEntries = nutritionEntries.map(entry => 
+          entry.id === existingEntry.id ? { ...nutritionData, id: existingEntry.id } : entry
+        );
+        setNutritionEntries(updatedEntries);
+        processNutritionHistory(updatedEntries);
+        
+        toast.success("Food item removed");
+      }
     } catch (error) {
-      console.error("Failed to delete nutrition entry:", error);
-      toast.error("Failed to delete nutrition entry");
+      console.error("Failed to update nutrition entry:", error);
+      toast.error("Failed to remove food item");
+    } finally {
+      setLoading(prev => ({ ...prev, nutrition: false }));
     }
   };
 
@@ -189,6 +358,90 @@ export default function TrackerPage() {
     if (startTabRef.current) {
       startTabRef.current.click();
     }
+  };
+
+  // Start a new empty workout
+  const startEmptyWorkout = () => {
+    const workout: WorkoutSession = {
+      name: "Custom Workout",
+      exercises: []
+    };
+    
+    setActiveWorkout(workout);
+  };
+  
+  // Add a new exercise to the active workout
+  const addExerciseToWorkout = () => {
+    if (!activeWorkout) return;
+    
+    const newWorkout = { ...activeWorkout };
+    newWorkout.exercises = [
+      ...newWorkout.exercises, 
+      {
+        name: "New Exercise",
+        sets: [
+          {
+            weight: 0,
+            reps: 0,
+            set_number: 1
+          }
+        ]
+      }
+    ];
+    
+    setActiveWorkout(newWorkout);
+  };
+  
+  // Add a set to an exercise
+  const addSetToExercise = (exerciseIndex: number) => {
+    if (!activeWorkout) return;
+    
+    const newWorkout = { ...activeWorkout };
+    const currentSets = newWorkout.exercises[exerciseIndex].sets;
+    newWorkout.exercises[exerciseIndex].sets = [
+      ...currentSets,
+      {
+        weight: currentSets[currentSets.length - 1]?.weight || 0,
+        reps: currentSets[currentSets.length - 1]?.reps || 0,
+        set_number: currentSets.length + 1
+      }
+    ];
+    
+    setActiveWorkout(newWorkout);
+  };
+  
+  // Delete an exercise from the active workout
+  const deleteExerciseFromWorkout = (exerciseIndex: number) => {
+    if (!activeWorkout) return;
+    
+    const newWorkout = { ...activeWorkout };
+    newWorkout.exercises = newWorkout.exercises.filter((_, i) => i !== exerciseIndex);
+    
+    setActiveWorkout(newWorkout);
+  };
+  
+  // Delete a set from an exercise
+  const deleteSetFromExercise = (exerciseIndex: number, setIndex: number) => {
+    if (!activeWorkout) return;
+    
+    const newWorkout = { ...activeWorkout };
+    newWorkout.exercises[exerciseIndex].sets = newWorkout.exercises[exerciseIndex].sets
+      .filter((_, i) => i !== setIndex);
+    
+    // Renumber the remaining sets
+    newWorkout.exercises[exerciseIndex].sets = newWorkout.exercises[exerciseIndex].sets
+      .map((set, idx) => ({
+        ...set,
+        set_number: idx + 1
+      }));
+    
+    // If all sets are removed, remove the exercise too
+    if (newWorkout.exercises[exerciseIndex].sets.length === 0) {
+      deleteExerciseFromWorkout(exerciseIndex);
+      return;
+    }
+    
+    setActiveWorkout(newWorkout);
   };
 
   return (
@@ -217,36 +470,64 @@ export default function TrackerPage() {
               <div className="text-center py-12">
                 <p className="text-gray-500 mb-4">Loading routines...</p>
               </div>
-            ) : routines.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {routines.map((routine) => (
-                  <Card key={routine.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle>{routine.name}</CardTitle>
-                      <CardDescription>
-                        Created: {new Date(routine.created_at || '').toLocaleDateString()}
+            ) : (
+              <div>
+                <div className="mb-6 max-w-md">
+                  <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-lg">Create Empty Workout</CardTitle>
+                      <CardDescription className="text-sm">
+                        Start a custom workout without a routine
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-500 mb-4">{routine.description}</p>
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">Exercises: {routine.exercises.length}</p>
-                      </div>
+                    <CardContent className="pb-2">
+                      <p className="text-xs text-gray-500">
+                        Build your workout from scratch by adding exercises and sets
+                      </p>
                     </CardContent>
-                    <CardFooter>
-                      <Button className="w-full" onClick={() => startWorkout(routine)}>
-                        Start Workout
+                    <CardFooter className="pt-2">
+                      <Button className="w-full" onClick={startEmptyWorkout}>
+                        Start Empty Workout
                       </Button>
                     </CardFooter>
                   </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500 mb-4">No routines found. Create a routine to get started.</p>
-                <Button asChild>
-                  <Link href="/routines">Create Routine</Link>
-                </Button>
+                </div>
+                
+                {routines.length > 0 ? (
+                  <div>
+                    <h2 className="text-xl font-semibold mb-4">Or select a routine:</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {routines.map((routine) => (
+                        <Card key={routine.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle>{routine.name}</CardTitle>
+                    <CardDescription>
+                              Created: {new Date(routine.created_at || '').toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-500 mb-4">{routine.description}</p>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Exercises: {routine.exercises.length}</p>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button className="w-full" onClick={() => startWorkout(routine)}>
+                      Start Workout
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 mt-6">
+                    <p className="text-gray-500 mb-4">No routines found. You can create a routine or start with an empty workout.</p>
+                    <Button asChild className="ml-2">
+                      <Link href="/routines">Create Routine</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
@@ -255,20 +536,77 @@ export default function TrackerPage() {
           {activeWorkout && (
             <TabsContent value="active">
               <Card>
-                <CardHeader>
-                  <CardTitle>{activeWorkout.name}</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>{activeWorkout.name}</CardTitle>
                   <CardDescription>Track your sets, reps, and weights for this workout</CardDescription>
+                  </div>
+                  <Button onClick={addExerciseToWorkout}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Exercise
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-8">
-                    {activeWorkout.exercises.map((exercise, exIndex) => (
+                    {activeWorkout.exercises.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500 mb-4">No exercises added yet</p>
+                        <Button onClick={addExerciseToWorkout}>
+                          <Plus className="h-4 w-4 mr-2" /> Add Exercise
+                        </Button>
+                      </div>
+                    ) : (
+                      activeWorkout.exercises.map((exercise, exIndex) => (
                       <div key={exIndex} className="border rounded-lg p-4">
-                        <h3 className="text-lg font-medium mb-4">{exercise.name}</h3>
+                          <div className="flex justify-between items-center mb-4">
+                            <div className="flex-1 mr-4">
+                              <Input
+                                value={exercise.name}
+                                onChange={(e) => {
+                                  const newWorkout = { ...activeWorkout };
+                                  newWorkout.exercises[exIndex].name = e.target.value;
+                                  setActiveWorkout(newWorkout);
+                                }}
+                                placeholder="Exercise Name"
+                                className="font-medium"
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => addSetToExercise(exIndex)}
+                              >
+                                <Plus className="h-4 w-4 mr-1" /> Add Set
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => deleteExerciseFromWorkout(exIndex)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Column Headers */}
+                          <div className="grid grid-cols-12 gap-4 mb-2 px-2">
+                            <div className="col-span-2">
+                              <Label className="text-sm text-gray-500">Set #</Label>
+                            </div>
+                            <div className="col-span-3">
+                              <Label className="text-sm text-gray-500">Weight (kg)</Label>
+                            </div>
+                            <div className="col-span-3">
+                              <Label className="text-sm text-gray-500">Reps</Label>
+                            </div>
+                            <div className="col-span-2"></div>
+                          </div>
+
                         <div className="space-y-4">
                           {exercise.sets.map((set, setIndex) => (
                             <div key={setIndex} className="grid grid-cols-12 gap-4 items-center">
                               <div className="col-span-2">
-                                <Label className="text-sm text-gray-500">Set {set.set_number}</Label>
+                                  <Label className="text-sm text-gray-500">Set {set.set_number}</Label>
                               </div>
                               <div className="col-span-3">
                                 <Input
@@ -276,9 +614,9 @@ export default function TrackerPage() {
                                   placeholder="Weight"
                                   value={set.weight}
                                   onChange={(e) => {
-                                    const newWorkout = { ...activeWorkout };
-                                    newWorkout.exercises[exIndex].sets[setIndex].weight = Number(e.target.value);
-                                    setActiveWorkout(newWorkout);
+                                      const newWorkout = { ...activeWorkout };
+                                      newWorkout.exercises[exIndex].sets[setIndex].weight = Number(e.target.value);
+                                      setActiveWorkout(newWorkout);
                                   }}
                                 />
                               </div>
@@ -288,17 +626,27 @@ export default function TrackerPage() {
                                   placeholder="Reps"
                                   value={set.reps}
                                   onChange={(e) => {
-                                    const newWorkout = { ...activeWorkout };
-                                    newWorkout.exercises[exIndex].sets[setIndex].reps = Number(e.target.value);
-                                    setActiveWorkout(newWorkout);
+                                      const newWorkout = { ...activeWorkout };
+                                      newWorkout.exercises[exIndex].sets[setIndex].reps = Number(e.target.value);
+                                      setActiveWorkout(newWorkout);
                                   }}
                                 />
+                              </div>
+                                <div className="col-span-2">
+                                <Button
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => deleteSetFromExercise(exIndex, setIndex)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-between">
@@ -307,7 +655,7 @@ export default function TrackerPage() {
                   </Button>
                   <Button 
                     onClick={completeWorkout}
-                    disabled={loading.workouts}
+                    disabled={loading.workouts || activeWorkout.exercises.length === 0}
                   >
                     Complete Workout
                   </Button>
@@ -323,7 +671,7 @@ export default function TrackerPage() {
                 <p className="text-gray-500 mb-4">Loading workout history...</p>
               </div>
             ) : workoutSessions.length > 0 ? (
-              <div className="space-y-6">
+            <div className="space-y-6">
                 {workoutSessions.map((workout) => (
                   <Card key={workout.id}>
                     <CardHeader>
@@ -362,146 +710,127 @@ export default function TrackerPage() {
                   </Card>
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500 mb-4">No workout history yet</p>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 mb-4">No workout history yet</p>
                 <Button variant="outline" onClick={navigateToStartWorkout}>
                   Start Your First Workout
                 </Button>
-              </div>
-            )}
+                </div>
+              )}
           </TabsContent>
 
-          {/* Nutrition Tracking Tab */}
+          {/* Simplified Nutrition Tracking Tab */}
           <TabsContent value="nutrition">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Add New Nutrition Entry */}
-              <Card className="lg:col-span-1">
-                <CardHeader>
-                  <CardTitle>Add Nutrition Entry</CardTitle>
-                  <CardDescription>
-                    Track your daily calories and protein intake
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={newNutrition.date}
-                        onChange={(e) => handleNutritionChange('date', e.target.value)}
-                      />
+            <Card>
+              <CardHeader>
+                <CardTitle>Simple Nutrition Tracker</CardTitle>
+                <CardDescription>
+                  {format(new Date(), 'MMMM d, yyyy')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Today's Totals */}
+                  <div className="flex space-x-4">
+                    <div className="bg-blue-50 rounded-lg p-4 text-center flex-1">
+                      <p className="text-sm font-medium text-blue-600 mb-1">Today's Calories</p>
+                      <p className="text-2xl font-bold text-blue-700">{todayTotals.calories}</p>
                     </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="calories">Calories (kcal)</Label>
-                      <Input
-                        id="calories"
-                        type="number"
-                        value={newNutrition.calories}
-                        onChange={(e) => handleNutritionChange('calories', Number(e.target.value))}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="protein">Protein (g)</Label>
-                      <Input
-                        id="protein"
-                        type="number"
-                        step="0.1"
-                        value={newNutrition.protein}
-                        onChange={(e) => handleNutritionChange('protein', Number(e.target.value))}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="notes">Notes (optional)</Label>
-                      <Textarea
-                        id="notes"
-                        value={newNutrition.notes || ''}
-                        onChange={(e) => handleNutritionChange('notes', e.target.value)}
-                        placeholder="Add notes about your meals, supplements, etc."
-                      />
+                    <div className="bg-blue-50 rounded-lg p-4 text-center flex-1">
+                      <p className="text-sm font-medium text-blue-600 mb-1">Today's Protein</p>
+                      <p className="text-2xl font-bold text-blue-700">{todayTotals.protein}g</p>
                     </div>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    className="w-full" 
-                    onClick={handleNutritionSubmit}
-                    disabled={loading.nutrition || !newNutrition.calories || !newNutrition.protein}
-                  >
-                    Save Entry
-                  </Button>
-                </CardFooter>
-              </Card>
-              
-              {/* Nutrition History */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>Nutrition History</CardTitle>
-                  <CardDescription>
-                    Your recent calorie and protein intake
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading.nutrition ? (
-                    <div className="text-center py-6">
-                      <p className="text-gray-500">Loading nutrition data...</p>
-                    </div>
-                  ) : nutritionEntries.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                          <thead>
-                            <tr className="bg-gray-100">
-                              <th className="py-2 px-4 text-left">Date</th>
-                              <th className="py-2 px-4 text-left">Calories</th>
-                              <th className="py-2 px-4 text-left">Protein</th>
-                              <th className="py-2 px-4 text-left">Notes</th>
-                              <th className="py-2 px-4 text-right">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {nutritionEntries.map((entry) => (
-                              <tr key={entry.id} className="border-b border-gray-200">
-                                <td className="py-3 px-4">
-                                  {new Date(entry.date).toLocaleDateString()}
-                                </td>
-                                <td className="py-3 px-4">{entry.calories} kcal</td>
-                                <td className="py-3 px-4">{entry.protein}g</td>
-                                <td className="py-3 px-4 text-sm text-gray-600 truncate max-w-[200px]">
-                                  {entry.notes || '-'}
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => entry.id && handleDeleteNutrition(entry.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  
+                  {/* Add Food Form */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-medium mb-3">Add Food</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="food-name">Food Name</Label>
+                        <Input
+                          id="food-name"
+                          value={newFood.name}
+                          onChange={(e) => handleFoodChange('name', e.target.value)}
+                          placeholder="e.g., Chicken Breast"
+                        />
                       </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="food-calories">Calories</Label>
+                          <Input
+                            id="food-calories"
+                            type="number"
+                            value={newFood.calories || ''}
+                            onChange={(e) => handleFoodChange('calories', Number(e.target.value))}
+                            placeholder="kcal"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="food-protein">Protein (g)</Label>
+                          <Input
+                            id="food-protein"
+                            type="number"
+                            step="0.1"
+                            value={newFood.protein || ''}
+                            onChange={(e) => handleFoodChange('protein', Number(e.target.value))}
+                            placeholder="grams"
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        className="w-full" 
+                        onClick={addFoodItem}
+                        disabled={loading.nutrition || !newFood.name || !newFood.calories}
+                      >
+                        <Plus className="h-4 w-4 mr-2" /> Add Food
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-3" />
-                      <p className="text-gray-500">No nutrition entries yet.</p>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Start tracking your calories and protein by adding your first entry.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                  </div>
+                  
+                  {/* Food Log */}
+                  <div className="border rounded-lg p-4">
+                    <h3 className="font-medium mb-3">Today's Food Log</h3>
+                    {loading.nutrition ? (
+                      <div className="text-center py-4">
+                        <p className="text-gray-500">Loading nutrition data...</p>
+                      </div>
+                    ) : todayFoods.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-12 text-sm font-medium text-gray-500 mb-2">
+                          <div className="col-span-5">Food</div>
+                          <div className="col-span-3 text-center">Calories</div>
+                          <div className="col-span-3 text-center">Protein</div>
+                          <div className="col-span-1"></div>
+                        </div>
+                        
+                        {todayFoods.map((food, index) => (
+                          <div key={index} className="grid grid-cols-12 items-center py-2 border-b last:border-0">
+                            <div className="col-span-5">{food.name}</div>
+                            <div className="col-span-3 text-center">{food.calories}</div>
+                            <div className="col-span-3 text-center">{food.protein}g</div>
+                            <div className="col-span-1 text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => deleteFoodItem(index)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-gray-500">No food items logged today</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>

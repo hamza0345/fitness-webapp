@@ -132,8 +132,8 @@ export default function RepCounterPage() {
     const drawingUtils = drawingUtilsRef.current;
     if (!drawingUtils) {
       requestRef.current = requestAnimationFrame(predictWebcam);
-      return;
-    }
+            return;
+        }
 
     /* keep canvas size in sync */
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
@@ -194,8 +194,8 @@ export default function RepCounterPage() {
               }
             } else {
               setLastAngle(null);
-            }
-          } else {
+                    }
+                } else {
             setLastAngle(null);
           }
         } catch (err) {
@@ -355,7 +355,7 @@ export default function RepCounterPage() {
     )}`;
 
   /* ---------- JSX ---------- */
-  return (
+    return (
     <div className="container mx-auto p-4 md:p-8 max-w-7xl">
       {/* Header */}
       <header className="mb-6">
@@ -429,16 +429,16 @@ export default function RepCounterPage() {
               </div>
             ) : null}
 
-            <video
-              ref={videoRef}
+                <video
+                    ref={videoRef}
               muted
               playsInline
-              autoPlay
+                    autoPlay
               className={`absolute inset-0 w-full h-full object-contain ${debugMode ? 'opacity-100 z-10' : 'opacity-100'}`}
               style={{ transform: "scaleX(-1)" }}
             />
-            <canvas
-              ref={canvasRef}
+                <canvas
+                    ref={canvasRef}
               className={`absolute inset-0 w-full h-full object-contain ${debugMode ? 'opacity-50 z-20' : ''}`}
               style={{ transform: "scaleX(-1)" }}
             />
@@ -447,14 +447,14 @@ export default function RepCounterPage() {
             {lastAngle !== null && (
               <div className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded z-30">
                 Angle: {Math.round(lastAngle)}°
-              </div>
-            )}
+                    </div>
+                )}
             {curlStage && (
               <div className="absolute bottom-2 left-2 bg-green-600/80 text-white px-3 py-1 rounded-full z-30">
                 {curlStage === "up" ? "UP" : "DOWN"}
-              </div>
-            )}
-          </div>
+                    </div>
+                )}
+            </div>
 
           {/* Debug info */}
           {debugMode && (
@@ -480,7 +480,7 @@ export default function RepCounterPage() {
               <>
                 {isProcessing ? (
                   <Button variant="outline" onClick={pauseProcessing}>
-                    <Pause className="mr-2" />
+                    <Pause className="mr-2" /> 
                     Pause
                   </Button>
                 ) : (
@@ -501,7 +501,7 @@ export default function RepCounterPage() {
                 </Button>
               </>
             )}
-          </div>
+                    </div>
 
           {/* Statistics and feedback */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -608,7 +608,7 @@ export default function RepCounterPage() {
                   maintain good form throughout your exercise for more accurate
                   counting.
                 </p>
-              </div>
+            </div>
             </CardContent>
             <CardFooter>
               <Button
@@ -621,6 +621,6 @@ export default function RepCounterPage() {
           </Card>
         </div>
       )}
-    </div>
-  );
+        </div>
+    );
 }
