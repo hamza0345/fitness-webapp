@@ -52,7 +52,7 @@ export default function RepCounterPage() {
     const [curlStage, setCurlStage] = useState<"down" | "up" | null>(null);
     const [lastAngle, setLastAngle] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [debugMode, setDebugMode] = useState(false);
+    const [debugMode, setDebugMode] = useState(true); // Set to true by default for easier troubleshooting
 
     /* ---------- refs ---------- */
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -153,25 +153,12 @@ export default function RepCounterPage() {
         }
         const drawingUtils = drawingUtilsRef.current;
 
-        
-
         // --- Start Drawing ---
-        // 1. Clear canvas and draw the current video frame
-        ctx.save(); // Save current state (important for clearing and transforming)
+        ctx.save(); // Save current state
         ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear previous drawings
-
-        // Apply the same mirroring transform to the drawing context
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        // Inside predictWebcam, after ctx.drawImage(video, ...):
-        ctx.fillStyle = 'lime'; // Use a bright color
-        ctx.fillRect(20, 20, 50, 50); // Draw a small square
-        console.log('Drew test square'); // Check if this log appears
         
-        ctx.restore(); // Restore context to normal (no mirroring for subsequent draws like text)
-        // --- End Drawing Video Frame ---
-
+        // NO LONGER drawing the video frame to the canvas - video element is now visible underneath
+        
         // Perform pose detection only on new frames
         if (video.readyState >= 3 && video.currentTime !== lastVideoTime) { // Check if video is ready and frame is new
             lastVideoTime = video.currentTime;
@@ -186,28 +173,19 @@ export default function RepCounterPage() {
                     const landmarks = results.landmarks[0] as NormalizedLandmark[]; // Assuming numPoses = 1
 
                     // --- Draw Landmarks and Connections ---
-                    // Save context before drawing landmarks (as drawing utils might change styles)
-                    ctx.save();
-                    // Apply mirroring transform again specifically for drawing landmarks/connections
-                    // This ensures they overlay correctly on the mirrored video feed drawn earlier
-                    ctx.translate(canvas.width, 0);
-                    ctx.scale(-1, 1);
-
-                    // Draw Connectors (lines between joints) - Optional but helpful
-                     drawingUtils.drawConnectors(
-                         landmarks,
-                         PoseLandmarker.POSE_CONNECTIONS,
-                         { color: "#3b82f6", lineWidth: 2 } // Blue connections
-                     );
-                     // Draw Landmarks (dots for joints)
-                     drawingUtils.drawLandmarks(landmarks, {
-                         color: "#4ade80", // Green dots
-                         lineWidth: 1,
-                         radius: 3
-                         // radius: (landmark) => DrawingUtils.lerp(landmark.z ?? 0, -0.15, 0.1, 5, 1) // Adjust size based on depth (optional)
-                     });
-
-                    ctx.restore(); // Restore context state after drawing
+                    // Since video is already mirrored with CSS, we don't need to mirror the landmarks drawing
+                    // Draw Connectors (lines between joints)
+                    drawingUtils.drawConnectors(
+                        landmarks,
+                        PoseLandmarker.POSE_CONNECTIONS,
+                        { color: "#3b82f6", lineWidth: 2 } // Blue connections
+                    );
+                    // Draw Landmarks (dots for joints)
+                    drawingUtils.drawLandmarks(landmarks, {
+                        color: "#4ade80", // Green dots
+                        lineWidth: 1,
+                        radius: 3
+                    });
                     // --- End Drawing Landmarks ---
 
 
@@ -247,7 +225,6 @@ export default function RepCounterPage() {
                             }
                             setCurlStage("up");
                             setRepCount(prev => prev + 1);
-                            // Optionally add logic for form quality based on angle consistency, smoothness etc. here
                         }
 
                         // Visualize Angle near Elbow (Drawing directly on canvas)
@@ -256,22 +233,18 @@ export default function RepCounterPage() {
                         ctx.fillStyle = "white";
                         ctx.font = "bold 18px Arial";
                         ctx.textAlign = "center";
-                        // Adjust position slightly to avoid overlap with the joint itself
-                        // Note: Since the main canvas drawing is mirrored, text needs to be drawn *without* mirror transform
-                        ctx.fillText(Math.round(angle).toString() + "°", canvas.width - elbowPixelX, elbowPixelY - 10); // Draw on the non-mirrored context
-
+                        // Display angle near elbow - no need to adjust for mirroring, as the video is already mirrored
+                        ctx.fillText(Math.round(angle).toString() + "°", elbowPixelX, elbowPixelY - 10);
 
                     } else {
                         // Reset angle if landmarks are not visible
                         setLastAngle(null);
-                        // console.warn("Required landmarks not sufficiently visible.");
                     }
                      // --- End Angle Calculation & Rep Counting ---
 
                 } else {
                     // No landmarks detected
                     setLastAngle(null);
-                     // console.log("No landmarks detected in this frame.");
                 }
 
             } catch (err: any) {
@@ -291,7 +264,6 @@ export default function RepCounterPage() {
             ctx.fillText(curlStage.toUpperCase(), 20, canvas.height - 20); // Bottom-left corner
         }
         // --- End Draw Curl Stage Text ---
-
 
         // --- Continue the loop ---
         if (isProcessing) {
@@ -349,42 +321,71 @@ export default function RepCounterPage() {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             streamRef.current = stream; // Store stream reference
 
-            if (videoRef.current) {
-              videoRef.current.srcObject = stream;
-              // Event listener for when video metadata is loaded
-              videoRef.current.onloadedmetadata = () => { // <--- KEEP THIS
-                   if (videoRef.current && canvasRef.current) { // <--- Add canvasRef check
-                      const video = videoRef.current;
-                      const canvas = canvasRef.current;
-      
-                      // --- *** NEW: Set canvas size here *** ---
-                      console.log(`Video dimensions on load: ${video.videoWidth}x${video.videoHeight}`);
-                      canvas.width = video.videoWidth;
-                      canvas.height = video.videoHeight;
-                      // --- *** End NEW *** ---
-      
-                      video.play(); // Start playing the video feed
-                      setIsCameraStarted(true);
-                      console.log("Camera started and video playing.");
-      
-                      // Delay starting processing slightly
-                      setTimeout(() => {
-                          setIsProcessing(true);
-                          startTimer();
-                          requestRef.current = requestAnimationFrame(predictWebcam); // Start the main loop
-                          console.log("Processing started.");
-                       }, 100); // Reduced delay slightly
-                  }
-              };
-               // Error handler for video element
-              videoRef.current.onerror = (e) => {
-                   console.error("Video element error:", e);
-                  setErrorMessage("An error occurred with the video stream.");
-                  stopProcessingAndCamera(); // Stop everything on video error
-               };
-          } else {
-              throw new Error("Video element ref is not available.");
-          }
+            if (videoRef.current && canvasRef.current) {
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                
+                // Set initial canvas size (will be updated when video metadata loads)
+                canvas.width = 640;  // Default fallback width
+                canvas.height = 480; // Default fallback height
+                
+                video.srcObject = stream;
+                
+                // Event listener for when video metadata is loaded
+                video.onloadedmetadata = () => {
+                    if (videoRef.current && canvasRef.current) {
+                        const video = videoRef.current;
+                        const canvas = canvasRef.current;
+                        
+                        console.log(`Video dimensions on load: ${video.videoWidth}x${video.videoHeight}`);
+                        
+                        // Set canvas size based on video dimensions
+                        if (video.videoWidth && video.videoHeight) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            console.log(`Canvas size set to: ${canvas.width}x${canvas.height}`);
+                        } else {
+                            console.warn("Video dimensions not available, using default canvas size");
+                        }
+                        
+                        video.play(); // Start playing the video feed
+                        setIsCameraStarted(true);
+                        console.log("Camera started and video playing.");
+                        
+                        // Delay starting processing slightly
+                        setTimeout(() => {
+                            setIsProcessing(true);
+                            startTimer();
+                            requestRef.current = requestAnimationFrame(predictWebcam); // Start the main loop
+                            console.log("Processing started.");
+                        }, 100);
+                    }
+                };
+                
+                // Additional event to handle video size changes or delayed size info
+                video.addEventListener('loadeddata', () => {
+                    if (videoRef.current && canvasRef.current && videoRef.current.videoWidth) {
+                        const video = videoRef.current;
+                        const canvas = canvasRef.current;
+                        
+                        // Update canvas dimensions if they haven't been set correctly yet
+                        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                            console.log(`Updating canvas dimensions on loadeddata: ${video.videoWidth}x${video.videoHeight}`);
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        }
+                    }
+                });
+                
+                // Error handler for video element
+                video.onerror = (e) => {
+                    console.error("Video element error:", e);
+                    setErrorMessage("An error occurred with the video stream.");
+                    stopProcessingAndCamera(); // Stop everything on video error
+                };
+            } else {
+                throw new Error("Video element ref is not available.");
+            }
         } catch (err: any) {
             console.error("Error starting camera:", err);
             let userMessage = `Failed to start camera: ${err.message || "Unknown error"}`;
@@ -576,20 +577,21 @@ export default function RepCounterPage() {
                             </div>
                         )}
 
-                         {/* Video Element (Hidden, used as source) */}
+                         {/* Video Element (Make it visible by removing opacity-0) */}
                          <video
                              ref={videoRef}
                              muted
                              playsInline
                              autoPlay
-                             className="absolute top-0 left-0 w-full h-full object-contain opacity-0 pointer-events-none" // Keep it hidden but functional
-                             // style={{ transform: "scaleX(-1)" }} // Mirroring is handled by drawing on canvas
+                             className="absolute top-0 left-0 w-full h-full object-contain z-0" // Made visible, lower z-index
+                             style={{ transform: "scaleX(-1)" }} // Mirror video for natural selfie view
                          />
 
-                         {/* Canvas Element (Visible, displays video and overlays) */}
+                         {/* Canvas Element (Transparent overlay for drawings) */}
                          <canvas
                             ref={canvasRef}
                             className="absolute top-0 left-0 w-full h-full object-contain z-10"
+                            style={{ backgroundColor: 'transparent' }} // Ensure canvas is transparent
                          />
 
                          {/* Angle display overlay */}
