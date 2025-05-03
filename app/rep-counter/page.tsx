@@ -15,7 +15,9 @@ import {
     Loader2,
     AlertCircle,
     VideoOff,
-    Dumbbell
+    Dumbbell,
+    RefreshCw,
+    Square
 } from "lucide-react";
 import {
     PoseLandmarker,
@@ -26,11 +28,21 @@ import {
 import useAuthGuard from "@/hooks/useAuthGuard";
 import { useWorkout } from "@/context/WorkoutContext";
 import { toast } from "sonner";
+import { WorkoutExercise, WorkoutSet } from "@/lib/api";
 
 /* ---- landmark indices ---- */
 const LEFT_SHOULDER = 11;
 const LEFT_ELBOW = 13;
 const LEFT_WRIST = 15;
+
+/* ---------- types ---------- */
+// Define the CurlSetInfo interface to match what's in WorkoutContext
+interface CurlSetInfo {
+    exerciseIndex: number;
+    setIndex: number;
+    exercise: WorkoutExercise;
+    set: WorkoutSet;
+}
 
 interface Point {
     x: number;
@@ -64,6 +76,8 @@ export default function RepCounterPage() {
     const drawingUtilsRef = useRef<DrawingUtils | null>(null);
     const lastVideoTimeRef = useRef(-1);
     const previousRepCountRef = useRef(0);
+    // Store the target set info when component loads
+    const targetSetRef = useRef<CurlSetInfo | null>(null);
     
     /* ---------- load model on mount ---------- */
     useEffect(() => {
@@ -117,6 +131,13 @@ export default function RepCounterPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Save target set when component loads
+    useEffect(() => {
+        targetSetRef.current = findIncompleteCurlSet();
+        console.log("Saved target set:", targetSetRef.current ? 
+          `${targetSetRef.current.exercise.name}, Set ${targetSetRef.current.set.set_number}` : 'None');
+    }, [findIncompleteCurlSet]);
+
     // Effect to track rep count changes and update workout if active
     useEffect(() => {
         // Only update the workout when there's a significant change (5+ reps)
@@ -129,13 +150,19 @@ export default function RepCounterPage() {
             // Update the reference to current count
             previousRepCountRef.current = repCount;
             
-            // Add the reps to the workout
-            addBicepCurls(newReps).catch(error => {
-                console.error('Failed to add bicep curls to workout:', error);
-                toast.error('Failed to add curls to workout');
-            });
+            // Use stored target set if available, otherwise fallback to finding current set
+            if (targetSetRef.current) {
+                console.log(`Updating stored target set: ${targetSetRef.current.exercise.name}, Set ${targetSetRef.current.set.set_number} with ${newReps} reps`);
+                updateSetReps(targetSetRef.current.exerciseIndex, targetSetRef.current.setIndex, repCount);
+            } else {
+                // Add the reps to the workout
+                addBicepCurls(newReps).catch(error => {
+                    console.error('Failed to add bicep curls to workout:', error);
+                    toast.error('Failed to add curls to workout');
+                });
+            }
         }
-    }, [repCount, addBicepCurls]);
+    }, [repCount, addBicepCurls, updateSetReps]);
     
     // Reset previous rep count when starting a new session
     useEffect(() => {
@@ -457,20 +484,29 @@ export default function RepCounterPage() {
         if (!isUnmounting && repCount > 0) {
             console.log(`stopProcessingAndCamera: Adding final rep count of ${repCount} to workout`);
             
-            // Get a fresh curlSet as it might have changed
-            const currentCurlSet = findIncompleteCurlSet();
-            
-            if (currentCurlSet) {
+            // Use stored target set if available, otherwise fallback to finding current set
+            if (targetSetRef.current) {
+                console.log(`Using stored target set: ${targetSetRef.current.exercise.name}, Set ${targetSetRef.current.set.set_number}`);
                 // Update the set directly with the total rep count
-                updateSetReps(currentCurlSet.exerciseIndex, currentCurlSet.setIndex, repCount);
-                markSetCompleted(currentCurlSet.exerciseIndex, currentCurlSet.setIndex);
-                toast.success(`Added ${repCount} reps to ${currentCurlSet.exercise.name}, Set ${currentCurlSet.set.set_number}`);
-            } else if (activeWorkout && activeWorkout.id) {
-                // Add via API if no incomplete set was found but there's an active workout
-                addBicepCurls(repCount).catch(error => {
-                    console.error('Failed to add final bicep curls to workout:', error);
-                    toast.error('Failed to add final rep count to workout');
-                });
+                updateSetReps(targetSetRef.current.exerciseIndex, targetSetRef.current.setIndex, repCount);
+                markSetCompleted(targetSetRef.current.exerciseIndex, targetSetRef.current.setIndex);
+                toast.success(`Added ${repCount} reps to ${targetSetRef.current.exercise.name}, Set ${targetSetRef.current.set.set_number}`);
+            } else {
+                // Get a fresh curlSet as it might have changed
+                const currentCurlSet = findIncompleteCurlSet();
+                
+                if (currentCurlSet) {
+                    // Update the set directly with the total rep count
+                    updateSetReps(currentCurlSet.exerciseIndex, currentCurlSet.setIndex, repCount);
+                    markSetCompleted(currentCurlSet.exerciseIndex, currentCurlSet.setIndex);
+                    toast.success(`Added ${repCount} reps to ${currentCurlSet.exercise.name}, Set ${currentCurlSet.set.set_number}`);
+                } else if (activeWorkout && activeWorkout.id) {
+                    // Add via API if no incomplete set was found but there's an active workout
+                    addBicepCurls(repCount).catch(error => {
+                        console.error('Failed to add final bicep curls to workout:', error);
+                        toast.error('Failed to add final rep count to workout');
+                    });
+                }
             }
             
             // Reset the counter after sending the final count
