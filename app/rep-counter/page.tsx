@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
     ArrowLeft,
     Camera,
@@ -15,8 +14,8 @@ import {
     Info,
     Loader2,
     AlertCircle,
-    Bug,
-    VideoOff
+    VideoOff,
+    Dumbbell
 } from "lucide-react";
 import {
     PoseLandmarker,
@@ -25,6 +24,8 @@ import {
     NormalizedLandmark
 } from "@mediapipe/tasks-vision";
 import useAuthGuard from "@/hooks/useAuthGuard";
+import { useWorkout } from "@/context/WorkoutContext";
+import { toast } from "sonner";
 
 /* ---- landmark indices ---- */
 const LEFT_SHOULDER = 11;
@@ -37,19 +38,22 @@ interface Point {
 }
 
 export default function RepCounterPage() {
-    // ... (other state variables remain the same) ...
+    const { activeWorkout, addBicepCurls, findIncompleteCurlSet, updateSetReps, markSetCompleted } = useWorkout();
+    const curlSet = findIncompleteCurlSet();
+    
+    /* ---------- state ---------- */
     const [activeTab, setActiveTab] = useState("live");
     const [isCameraStarted, setIsCameraStarted] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoadingModel, setIsLoadingModel] = useState(true);
     const [repCount, setRepCount] = useState(0);
     const [exerciseTime, setExerciseTime] = useState(0);
-    const [formQuality, setFormQuality] = useState(85);
     const [curlStage, setCurlStage] = useState<"down" | "up" | null>(null);
     const [lastAngle, setLastAngle] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [debugMode, setDebugMode] = useState(true);
-
+    // Debug mode is now always on but UI element removed
+    const debugMode = true;
+    
     /* ---------- refs ---------- */
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,8 +62,9 @@ export default function RepCounterPage() {
     const requestRef = useRef<number | null>(null);
     const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
     const drawingUtilsRef = useRef<DrawingUtils | null>(null);
-    const lastVideoTimeRef = useRef(-1); // Use a ref for lastVideoTime
-
+    const lastVideoTimeRef = useRef(-1);
+    const previousRepCountRef = useRef(0);
+    
     /* ---------- load model on mount ---------- */
     useEffect(() => {
         console.log("useEffect: Initializing...");
@@ -112,6 +117,32 @@ export default function RepCounterPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Effect to track rep count changes and update workout if active
+    useEffect(() => {
+        // Only update the workout when there's a significant change (5+ reps)
+        // Final count will be sent when stopping the camera
+        const newReps = repCount - previousRepCountRef.current;
+        
+        if (newReps >= 5) {
+            console.log(`Significant rep change detected: +${newReps} reps (total: ${repCount})`);
+            
+            // Update the reference to current count
+            previousRepCountRef.current = repCount;
+            
+            // Add the reps to the workout
+            addBicepCurls(newReps).catch(error => {
+                console.error('Failed to add bicep curls to workout:', error);
+                toast.error('Failed to add curls to workout');
+            });
+        }
+    }, [repCount, addBicepCurls]);
+    
+    // Reset previous rep count when starting a new session
+    useEffect(() => {
+        if (isCameraStarted) {
+            previousRepCountRef.current = 0;
+        }
+    }, [isCameraStarted]);
 
     /* ---------- helpers ---------- */
     const calculateAngle = useCallback((a: Point, b: Point, c: Point): number => {
@@ -422,6 +453,30 @@ export default function RepCounterPage() {
 
         stopTimer();
 
+        // Add the final rep count to the workout when stopping the camera (not when unmounting)
+        if (!isUnmounting && repCount > 0) {
+            console.log(`stopProcessingAndCamera: Adding final rep count of ${repCount} to workout`);
+            
+            // Get a fresh curlSet as it might have changed
+            const currentCurlSet = findIncompleteCurlSet();
+            
+            if (currentCurlSet) {
+                // Update the set directly with the total rep count
+                updateSetReps(currentCurlSet.exerciseIndex, currentCurlSet.setIndex, repCount);
+                markSetCompleted(currentCurlSet.exerciseIndex, currentCurlSet.setIndex);
+                toast.success(`Added ${repCount} reps to ${currentCurlSet.exercise.name}, Set ${currentCurlSet.set.set_number}`);
+            } else if (activeWorkout && activeWorkout.id) {
+                // Add via API if no incomplete set was found but there's an active workout
+                addBicepCurls(repCount).catch(error => {
+                    console.error('Failed to add final bicep curls to workout:', error);
+                    toast.error('Failed to add final rep count to workout');
+                });
+            }
+            
+            // Reset the counter after sending the final count
+            previousRepCountRef.current = 0;
+        }
+
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -491,31 +546,59 @@ export default function RepCounterPage() {
     };
 
     /* ---------- JSX ---------- */
-    // ... (JSX structure remains the same) ...
-     return (
+    return (
         <div className="container mx-auto p-4 md:p-8 max-w-7xl">
             {/* Header */}
             <header className="mb-6">
-                 {/* ... Link and Title ... */}
-                 <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
-                    <ArrowLeft size={16} /><span>Back to Home</span>
-                 </Link>
-                 <div className="flex justify-between items-center">
-                     <div>
-                         <h1 className="text-3xl font-bold">Rep Counter</h1>
-                         <p className="text-gray-500">Count your bicep curls automatically</p>
-                     </div>
-                     <Button variant="outline" size="icon" onClick={() => setDebugMode(!debugMode)} title={debugMode ? "Hide Debug Info" : "Show Debug Info"}>
-                         <Bug size={18} />
-                     </Button>
-                 </div>
+                <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
+                    <ArrowLeft size={16} />
+                    <span>Back to Home</span>
+                </Link>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold">Rep Counter</h1>
+                        <p className="text-gray-500">Count your bicep curls automatically with computer vision</p>
+                    </div>
+                    {/* Active workout indicator */}
+                    {activeWorkout && (
+                        <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                            Active Workout: {activeWorkout.name}
+                        </div>
+                    )}
+                </div>
+                
+                {/* Target set information */}
+                {curlSet && (
+                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3 flex items-center gap-3">
+                        <Dumbbell className="h-5 w-5 text-blue-500" />
+                        <div>
+                            <p className="font-medium text-blue-700">
+                                Target: {curlSet.exercise.name}, Set {curlSet.set.set_number}
+                            </p>
+                            <p className="text-sm text-blue-600">
+                                Current tracking will be added to this set
+                            </p>
+                        </div>
+                    </div>
+                )}
             </header>
 
             {/* Tabs */}
             <div className="flex border-b mb-6">
-                 {/* ... Tab buttons ... */}
-                  <button className={`px-4 py-2 ${activeTab === "live" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"}`} onClick={() => setActiveTab("live")}>Live Camera</button>
-                  <button className={`px-4 py-2 ${activeTab === "tutorial" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"}`} onClick={() => setActiveTab("tutorial")}>Tutorial</button>
+                <button
+                    className={`px-4 py-2 ${activeTab === "live" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    onClick={() => setActiveTab("live")}
+                >
+                    Live Camera
+                </button>
+                <button
+                    className={`px-4 py-2 ${activeTab === "tutorial" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"
+                        }`}
+                    onClick={() => setActiveTab("tutorial")}
+                >
+                    Tutorial
+                </button>
             </div>
 
             {activeTab === "live" ? (
@@ -567,6 +650,8 @@ export default function RepCounterPage() {
                                  <p>Curl Stage: <span className="font-mono text-orange-400">{curlStage||'N/A'}</span></p>
                                  <p>Last Vid Time: <span className="font-mono text-purple-400">{lastVideoTimeRef.current.toFixed(2)}</span></p>
                                  <p>Canvas Size: <span className="font-mono text-blue-400">{canvasRef.current?`${canvasRef.current.width}x${canvasRef.current.height}`:'N/A'}</span></p>
+                                 <p>Active Workout: <span className="font-mono text-green-400">{activeWorkout ? activeWorkout.name : 'None'}</span></p>
+                                 <p>Target Set: <span className="font-mono text-green-400">{curlSet ? `${curlSet.exercise.name} Set ${curlSet.set.set_number}` : 'None'}</span></p>
                                  <p>Error: <span className="font-mono text-red-400">{errorMessage||'None'}</span></p>
                              </CardContent>
                          </Card>
@@ -590,13 +675,11 @@ export default function RepCounterPage() {
                      </div>
 
                     {/* ... Statistics and feedback ... */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                           {/* ... Reps Card ... */}
                           <Card className="shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">REPS</CardTitle></CardHeader><CardContent><div className="text-5xl font-bold text-gray-900">{repCount}</div></CardContent></Card>
                           {/* ... Time Card ... */}
                            <Card className="shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">TIME</CardTitle></CardHeader><CardContent><div className="text-5xl font-bold text-gray-900">{formatTime(exerciseTime)}</div></CardContent></Card>
-                          {/* ... Form Quality Card ... */}
-                           <Card className="shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">FORM QUALITY (Est.)</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2 mt-1"><Progress value={formQuality} className="flex-1 h-3" /><span className="text-xl font-bold text-gray-900">{formQuality}%</span></div><p className="text-xs text-gray-400 mt-1">Basic estimation</p></CardContent></Card>
                      </div>
 
                     {/* ... Tips Card ... */}

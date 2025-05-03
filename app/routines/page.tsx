@@ -186,12 +186,12 @@ export default function RoutinesPage() {
 
   /* --- Edit / Delete Routine --- */
   const startEdit = (routineToEdit: RoutineWithEx) => {
-     // Prepare draft state, ensuring exercises have string values for inputs
-     const draftExercises = routineToEdit.exercises.map(ex => ({
+     // Prepare draft state, ensuring exercises have numeric values
+     const draftExercises: RoutineExercise[] = routineToEdit.exercises.map(ex => ({
          ...ex,
-         sets: ex.sets?.toString() ?? '', // Convert to string or empty string
-         reps: ex.reps?.toString() ?? '',
-         weight: ex.weight?.toString() ?? '',
+         sets: Number(ex.sets) || 0,
+         reps: Number(ex.reps) || 0,
+         weight: Number(ex.weight) || 0,
      }));
 
     setDraft({

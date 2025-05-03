@@ -117,9 +117,10 @@ export interface RoutineWithEx {
 // Actual set performed in a workout session
 export interface WorkoutSet {
   id?: number;
-  weight: number;
+  weight: number | string; // Allow weight to be either number or string
   reps: number;
   set_number: number;
+  completed?: boolean; // Add completed flag for tracking set completion
 }
 
 // Actual exercise performed in a workout session
@@ -315,19 +316,28 @@ export async function createWorkoutSession(session: CreateWorkoutSessionData): P
   const token = getToken();
   if (!token) throw new Error("Not authenticated");
 
-  // Ensure set_number is present if missing
-   const processedSession = {
-        ...session,
-        exercises: session.exercises.map((ex, exIndex) => ({
-            ...ex,
-            order: ex.order ?? exIndex, // Add order if missing
-            sets: ex.sets.map((set, setIndex) => ({
-                ...set,
-                set_number: set.set_number ?? setIndex + 1, // Add set_number if missing
-            })),
-        })),
-    };
-
+  // Process the workout data to avoid sending duplicate parameters to the backend
+  const processedSession = {
+    ...session,
+    exercises: session.exercises.map((ex, exIndex) => {
+      // Make a clean copy of the exercise
+      const { name, order, ...rest } = ex;  
+      return {
+        // Include these fields explicitly to avoid duplicates
+        name,
+        order: order ?? exIndex,
+        // Process sets to ensure set_number is present & weight is formatted correctly
+        sets: ex.sets.map((set, setIndex) => {
+          const { set_number, ...restSet } = set;
+          return {
+            ...restSet,
+            weight: parseFloat(set.weight.toString()).toFixed(2), // Convert to string with 2 decimal places
+            set_number: set_number ?? setIndex + 1, // Add set_number if missing
+          };
+        }),
+      };
+    }),
+  };
 
   const res = await fetch(`${API_URL}/workouts/`, {
     method: "POST",
@@ -338,23 +348,23 @@ export async function createWorkoutSession(session: CreateWorkoutSessionData): P
     body: JSON.stringify(processedSession),
   });
 
-   if (!res.ok) {
-       const errorData = await res.json().catch(() => ({ detail: "Could not create workout session" }));
-       console.error("Create workout error:", errorData);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Could not create workout session" }));
+    console.error("Create workout error:", errorData);
 
-       // Provide more specific error messages if possible
-       let errorMessage = "Could not create workout session.";
-       if (typeof errorData === 'object' && errorData !== null) {
-            if (errorData.detail) {
-                errorMessage = errorData.detail;
-            } else if (errorData.exercises) {
-                 errorMessage = `Error in exercises: ${JSON.stringify(errorData.exercises)}`;
-            } else {
-                 errorMessage = JSON.stringify(errorData);
-            }
-       }
-       throw new Error(errorMessage);
+    // Provide more specific error messages if possible
+    let errorMessage = "Could not create workout session.";
+    if (typeof errorData === 'object' && errorData !== null) {
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      } else if (errorData.exercises) {
+        errorMessage = `Error in exercises: ${JSON.stringify(errorData.exercises)}`;
+      } else {
+        errorMessage = JSON.stringify(errorData);
+      }
     }
+    throw new Error(errorMessage);
+  }
   return res.json();
 }
 
@@ -370,6 +380,88 @@ export async function deleteWorkoutSession(id: number): Promise<void> {
   if (!res.ok && res.status !== 204) {
       throw new Error("Could not delete workout session");
   }
+}
+
+export async function updateWorkoutSession(id: number, workout: Partial<WorkoutSession>): Promise<WorkoutSession> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  // Process workout data to ensure weight values are properly formatted
+  let processedWorkout = { ...workout };
+  
+  // If workout has exercises, format their weight values
+  if (processedWorkout.exercises) {
+    processedWorkout = {
+      ...processedWorkout,
+      exercises: processedWorkout.exercises.map(ex => ({
+        ...ex,
+        sets: ex.sets?.map(set => ({
+          ...set,
+          weight: typeof set.weight === 'number' ? parseFloat(set.weight.toString()).toFixed(2) : set.weight,
+        })) || []
+      }))
+    };
+  }
+
+  const res = await fetch(`${API_URL}/workouts/${id}/`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(processedWorkout),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Could not update workout session" }));
+    console.error("Update workout error:", errorData);
+    throw new Error(errorData.detail || JSON.stringify(errorData) || "Could not update workout session");
+  }
+  return res.json();
+}
+
+// Function to add bicep curl reps to an existing workout session
+export async function addBicepCurlRepsToWorkout(workoutId: number, reps: number): Promise<WorkoutSession> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  
+  // First get the current workout
+  const workout = await getWorkoutSession(workoutId);
+  
+  // Check if the workout has a "Bicep Curl" exercise
+  let bicepExercise = workout.exercises.find(ex => 
+    ex.name.toLowerCase().includes("bicep curl") || 
+    ex.name.toLowerCase().includes("bicep") || 
+    ex.name.toLowerCase().includes("curl")
+  );
+  
+  // If no bicep exercise exists, add one
+  if (!bicepExercise) {
+    workout.exercises.push({
+      name: "Bicep Curl",
+      order: workout.exercises.length,
+      sets: [{
+        weight: "0.00", // Use string format with 2 decimal places
+        reps: reps,
+        set_number: 1
+      }]
+    });
+  } else {
+    // Add the reps to the last set of the bicep exercise
+    const lastSet = bicepExercise.sets[bicepExercise.sets.length - 1];
+    if (lastSet) {
+      lastSet.reps += reps;
+    } else {
+      bicepExercise.sets.push({
+        weight: "0.00", // Use string format with 2 decimal places
+        reps: reps,
+        set_number: 1
+      });
+    }
+  }
+  
+  // Update the workout
+  return updateWorkoutSession(workoutId, workout);
 }
 
 /* ------------------------------------------------------------------ */

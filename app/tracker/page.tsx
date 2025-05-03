@@ -30,6 +30,7 @@ import {
   WorkoutExercise, // Import type
   WorkoutSet, // Import type
 } from "@/lib/api" // Adjust path as necessary
+import { useWorkout } from "@/context/WorkoutContext"
 
 // Interface for tracking food items (remains the same)
 interface FoodItem {
@@ -38,23 +39,36 @@ interface FoodItem {
   protein: number;
 }
 
+// Extend the WorkoutSet interface to include completed status
+interface ExtendedWorkoutSet extends WorkoutSet {
+  completed?: boolean;
+}
+
 export default function TrackerPage() {
   // Auth Guard
   const isAuthenticated = useAuthGuard();
+
+  // Get workout state from context
+  const { 
+    activeWorkout, 
+    setActiveWorkout, 
+    workoutSessions, 
+    setWorkoutSessions, 
+    loading: workoutLoading 
+  } = useWorkout();
 
   // Refs
   const startTabRef = useRef<HTMLButtonElement>(null);
 
   // State
   const [routines, setRoutines] = useState<RoutineWithEx[]>([])
-  const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([])
-  const [activeWorkout, setActiveWorkout] = useState<WorkoutSession | null>(null)
   const [predefinedExercises, setPredefinedExercises] = useState<PredefinedExercise[]>([]); // State for predefined exercises
   const [loading, setLoading] = useState({
     routines: true,
-    workouts: true,
     nutrition: true,
-    predefinedExercises: true, // Add loading state for exercises
+    predefinedExercises: true,
+    save: false, // Add save loading state
+    delete: false // Add delete loading state
   })
   const [nutritionEntries, setNutritionEntries] = useState<NutritionEntry[]>([])
   const [todayFoods, setTodayFoods] = useState<FoodItem[]>([])
@@ -84,17 +98,7 @@ export default function TrackerPage() {
         setLoading(prev => ({ ...prev, routines: false }));
       }
 
-      // Fetch Workouts
-      try {
-        setLoading(prev => ({ ...prev, workouts: true }));
-        const workoutsData = await getWorkoutSessions();
-        setWorkoutSessions(workoutsData);
-      } catch (error) {
-        console.error("Failed to fetch workout sessions:", error);
-        toast.error("Failed to load workout history");
-      } finally {
-        setLoading(prev => ({ ...prev, workouts: false }));
-      }
+      // Workouts are now handled by the WorkoutContext
 
       // Fetch Nutrition
       try {
@@ -184,6 +188,7 @@ export default function TrackerPage() {
           weight: Number(ex.weight) || 0, // Ensure number
           reps: Number(ex.reps) || 0, // Ensure number
           set_number: setIdx + 1,
+          completed: false // Add completed property
         }))
       }))
     };
@@ -213,9 +218,8 @@ export default function TrackerPage() {
          return;
      }
 
-
     try {
-      setLoading(prev => ({ ...prev, workouts: true }));
+      setLoading(prev => ({ ...prev, save: true }));
       const savedWorkout = await createWorkoutSession(activeWorkout);
       setWorkoutSessions([savedWorkout, ...workoutSessions]);
       setActiveWorkout(null);
@@ -225,7 +229,7 @@ export default function TrackerPage() {
       console.error("Failed to save workout:", error);
       toast.error(`Failed to save workout: ${error.message || 'Unknown error'}`);
     } finally {
-      setLoading(prev => ({ ...prev, workouts: false }));
+      setLoading(prev => ({ ...prev, save: false }));
     }
   };
 
@@ -233,7 +237,7 @@ export default function TrackerPage() {
     if (!id) return; // Check if id is defined
     if (!confirm("Are you sure you want to delete this workout session?")) return;
     try {
-      setLoading(prev => ({...prev, workouts: true}));
+      setLoading(prev => ({...prev, delete: true}));
       await deleteWorkoutSession(id);
       setWorkoutSessions(prev => prev.filter(workout => workout.id !== id));
       toast.success("Workout deleted");
@@ -241,7 +245,7 @@ export default function TrackerPage() {
       console.error("Failed to delete workout:", error);
       toast.error(`Failed to delete workout: ${error.message || 'Unknown error'}`);
     } finally {
-        setLoading(prev => ({...prev, workouts: false}));
+        setLoading(prev => ({...prev, delete: false}));
     }
   };
 
@@ -254,7 +258,7 @@ export default function TrackerPage() {
       {
         name: "", // Start with empty name for combobox
         order: newWorkout.exercises.length,
-        sets: [{ weight: 0, reps: 0, set_number: 1 }]
+        sets: [{ weight: 0, reps: 0, set_number: 1, completed: false }]
       }
     ];
     setActiveWorkout(newWorkout);
@@ -270,9 +274,26 @@ export default function TrackerPage() {
   const handleSetChange = (exIndex: number, setIndex: number, field: keyof Omit<WorkoutSet, 'id' | 'set_number'>, value: string) => {
     if (!activeWorkout) return;
     const newWorkout = { ...activeWorkout };
-    // Ensure the value is treated as a number
-    (newWorkout.exercises[exIndex].sets[setIndex] as any)[field] = Number(value) || 0;
+    
+    // For weight field, ensure it's stored as a number but will be converted to a proper decimal string when sent to API
+    if (field === 'weight') {
+      // Parse as float and ensure it's a valid number
+      const numVal = parseFloat(value) || 0;
+      (newWorkout.exercises[exIndex].sets[setIndex] as any)[field] = numVal;
+    } else if (field === 'completed') {
+      // Handle completed flag separately
+      (newWorkout.exercises[exIndex].sets[setIndex] as any)[field] = value === 'true';
+    } else {
+      // For other fields like reps, convert to number
+      (newWorkout.exercises[exIndex].sets[setIndex] as any)[field] = Number(value) || 0;
+    }
+    
     setActiveWorkout(newWorkout);
+    
+    // Log the change for debugging
+    console.log(`Set ${setIndex+1} of ${newWorkout.exercises[exIndex].name} updated:`, 
+                field, '=', (newWorkout.exercises[exIndex].sets[setIndex] as any)[field],
+                'completed =', newWorkout.exercises[exIndex].sets[setIndex].completed);
   };
 
 
@@ -281,14 +302,35 @@ export default function TrackerPage() {
     const newWorkout = { ...activeWorkout };
     const currentSets = newWorkout.exercises[exerciseIndex].sets;
     const lastSet = currentSets[currentSets.length - 1];
+    
+    // Get the weight from last set (default to 0 if not available)
+    const lastWeight = lastSet?.weight || 0;
+    
     newWorkout.exercises[exerciseIndex].sets = [
       ...currentSets,
       {
-        weight: lastSet?.weight || 0,
+        weight: lastWeight, // Use the last weight value directly
         reps: lastSet?.reps || 0,
-        set_number: currentSets.length + 1
+        set_number: currentSets.length + 1,
+        completed: false
       }
     ];
+    setActiveWorkout(newWorkout);
+  };
+
+  // Function to toggle the completed status of a set
+  const toggleSetCompleted = (exerciseIndex: number, setIndex: number) => {
+    if (!activeWorkout) return;
+    
+    const newWorkout = { ...activeWorkout };
+    const set = newWorkout.exercises[exerciseIndex].sets[setIndex];
+    const exercise = newWorkout.exercises[exerciseIndex];
+    
+    // Toggle the completed status
+    set.completed = !set.completed;
+    
+    console.log(`${exercise.name} Set ${set.set_number} marked as ${set.completed ? 'completed' : 'incomplete'}`);
+    
     setActiveWorkout(newWorkout);
   };
 
@@ -652,7 +694,24 @@ export default function TrackerPage() {
                                     className="text-center"
                                   />
                                 </div>
-                                <div className="col-span-2 flex items-center justify-center">
+                                <div className="col-span-2 flex items-center justify-center gap-1">
+                                  <Button
+                                    variant={set.completed ? "default" : "outline"}
+                                    size="icon"
+                                    className={`h-8 w-8 ${set.completed ? "bg-green-500 hover:bg-green-600" : ""}`}
+                                    onClick={() => toggleSetCompleted(exIndex, setIndex)}
+                                    aria-label={`Mark set ${set.set_number} as ${set.completed ? "incomplete" : "complete"}`}
+                                  >
+                                    {set.completed ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                      </svg>
+                                    )}
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -685,9 +744,9 @@ export default function TrackerPage() {
                   </Button>
                   <Button
                     onClick={completeWorkout}
-                    disabled={loading.workouts || !activeWorkout || activeWorkout.exercises.length === 0 || activeWorkout.exercises.some(ex => !ex.name.trim())}
+                    disabled={loading.save || !activeWorkout || activeWorkout.exercises.length === 0 || activeWorkout.exercises.some(ex => !ex.name.trim())}
                   >
-                    {loading.workouts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {loading.save ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Complete & Save Workout
                   </Button>
                 </CardFooter>
@@ -697,7 +756,7 @@ export default function TrackerPage() {
 
            {/* Workout History Tab */}
            <TabsContent value="history">
-             {loading.workouts ? (
+             {workoutLoading ? (
                <div className="text-center py-12 text-muted-foreground">
                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4" />
                  Loading workout history...
@@ -733,7 +792,7 @@ export default function TrackerPage() {
                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-sm">
                                {ex.sets.map((set, setIndex) => (
                                  <div key={setIndex} className="bg-muted rounded p-2 text-center text-muted-foreground">
-                                   <span className="font-medium">Set {set.set_number}:</span> {set.weight}kg × {set.reps} reps
+                                   <span className="font-medium">Set {set.set_number}:</span> {typeof set.weight === 'string' ? set.weight : set.weight.toFixed(2)}kg × {set.reps} reps
                                  </div>
                                ))}
                              </div>

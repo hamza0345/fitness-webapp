@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
+import { WorkoutProvider } from "@/context/WorkoutContext";
 import Navbar from "@/components/Navbar";
 import RouteGuard from "@/components/RouteGuard";
 
@@ -22,10 +23,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <AuthProvider>
-          <Navbar />
-          <RouteGuard>
-            {children}
-          </RouteGuard>
+          <WorkoutProvider>
+            <Navbar />
+            <RouteGuard>
+              {children}
+            </RouteGuard>
+          </WorkoutProvider>
         </AuthProvider>
       </body>
     </html>

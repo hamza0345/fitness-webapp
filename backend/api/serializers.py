@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import Routine, Exercise, WorkoutSession, WorkoutExercise, WorkoutSet, NutritionEntry
 from .models import PredefinedExercise, ImprovementRule # Add new models here
 import re
+from decimal import Decimal  # Import Decimal for proper numeric handling
 
 # ----------  USERS  ----------
 class RegisterSerializer(serializers.ModelSerializer):
@@ -94,10 +95,10 @@ class RoutineSerializer(serializers.ModelSerializer):
 class WorkoutSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkoutSet
-        fields = ('id', 'weight', 'reps', 'set_number')
-        # You might want to add extra_kwargs for min_value validation if desired
+        fields = ('id', 'weight', 'reps', 'set_number', 'completed')
+        # Update min_value to use Decimal for weight
         extra_kwargs = {
-             'weight': {'min_value': 0},
+             'weight': {'min_value': Decimal('0')},
              'reps': {'min_value': 0},
              'set_number': {'min_value': 1},
          }
@@ -139,35 +140,50 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         for idx, exercise_data in enumerate(exercises_data):
             sets_data = exercise_data.pop('sets', [])
 
-            # --- FIX for 'order' TypeError STARTS HERE ---
-            # Remove 'order' from exercise_data if it exists, to prevent duplicate keyword argument
+            # --- FIX for duplicate parameters STARTS HERE ---
+            # Remove both 'order' and 'name' from exercise_data if they exist
             exercise_data_cleaned = exercise_data.copy()
             if 'order' in exercise_data_cleaned:
                 exercise_data_cleaned.pop('order')
-            # --- FIX for 'order' TypeError ENDS HERE ---
+            
+            # Extract name and remove from cleaned data to avoid duplicate parameter
+            exercise_name = exercise_data_cleaned.pop('name', f'Exercise {idx+1}')
+            
+            # Handle case where name is empty
+            if not exercise_name.strip():
+                print(f"Warning: Empty name for exercise at index {idx}. Using default name.")
+                exercise_name = f'Exercise {idx+1}'
+            # --- FIX for duplicate parameters ENDS HERE ---
 
-            # Pass the explicit order=idx and the rest of the cleaned data
-            # Ensure exercise name is present
-            exercise_name = exercise_data_cleaned.get('name', f'Exercise {idx+1}') # Provide default name?
-            if not exercise_name: # Or raise validation error earlier
-                 # Handle missing name case - skip, use default, or raise error
-                 print(f"Warning: Skipping exercise at index {idx} due to missing name.") # Log warning
-                 continue # Skip this exercise
-
-
+            # Create the exercise with name passed as explicit parameter
             exercise = WorkoutExercise.objects.create(
                 workout_session=workout,
-                order=idx, # Explicitly set the order based on the list index
-                name=exercise_name, # Ensure name is passed
-                **exercise_data_cleaned # Pass the rest of the data (potentially empty now)
+                order=idx,
+                name=exercise_name,
+                **exercise_data_cleaned  # Now doesn't include name
             )
 
             for set_idx, set_data in enumerate(sets_data):
                 # Ensure set_number is handled correctly
                 set_number = set_data.pop('set_number', set_idx + 1) # Use provided or calculate default
-                # Ensure weight and reps are numeric and handle missing keys
-                weight = set_data.pop('weight', 0)
-                reps = set_data.pop('reps', 0)
+                
+                # Ensure weight is properly handled as Decimal type
+                weight_value = set_data.pop('weight', 0)
+                # If weight is a string (from JSON), convert to Decimal
+                if isinstance(weight_value, str):
+                    try:
+                        weight = Decimal(weight_value)
+                    except:
+                        weight = Decimal('0.00')
+                else:
+                    weight = Decimal(str(weight_value))
+                
+                # Ensure reps is an integer
+                reps_value = set_data.pop('reps', 0)
+                try:
+                    reps = int(reps_value)
+                except (ValueError, TypeError):
+                    reps = 0
 
                 WorkoutSet.objects.create(
                     exercise=exercise,

@@ -52,6 +52,7 @@ class WorkoutSet(models.Model):
     weight = models.DecimalField(max_digits=6, decimal_places=2)
     reps = models.PositiveSmallIntegerField()
     set_number = models.PositiveSmallIntegerField()
+    completed = models.BooleanField(default=False)  # Keep the completed flag
     
     class Meta:
         ordering = ["set_number"]
