@@ -63,8 +63,6 @@ export default function RepCounterPage() {
     const [curlStage, setCurlStage] = useState<"down" | "up" | null>(null);
     const [lastAngle, setLastAngle] = useState<number | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    // Debug mode is now always on but UI element removed
-    const debugMode = true;
     
     // Track eccentric timing
     const [eccentricTooFast, setEccentricTooFast] = useState(false);
@@ -312,7 +310,7 @@ export default function RepCounterPage() {
                                 if (eccentricTime < 750) {
                                     console.log("Eccentric too fast! Showing warning");
                                     setEccentricTooFast(true);
-                                    setWarningTimer(2000); // Show warning for 2 seconds
+                                    setWarningTimer(3500); // Show warning for 3.5 seconds (increased from 2)
                                 }
                             }
                             
@@ -339,10 +337,10 @@ export default function RepCounterPage() {
                             ctx.save();
                             ctx.translate(canvas.width, 0); ctx.scale(-1, 1); // Undo mirror for text
                             
-                            // Create a more prominent semi-transparent background
-                            ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
-                            const textWidth = 180;
-                            const textHeight = 40;
+                            // Create a more prominent semi-transparent background with less opacity
+                            ctx.fillStyle = "rgba(255, 0, 0, 0.65)"; // Reduced opacity from 0.8 to 0.65
+                            const textWidth = 200; // Slightly wider
+                            const textHeight = 50; // Slightly taller
                             
                             // Position in the center of the screen
                             const warningX = canvas.width/2 - textWidth/2;
@@ -350,19 +348,19 @@ export default function RepCounterPage() {
                             
                             // Draw background with slight border radius effect
                             ctx.beginPath();
-                            ctx.roundRect(warningX, warningY, textWidth, textHeight, 8);
+                            ctx.roundRect(warningX, warningY, textWidth, textHeight, 10); // Increased border radius
                             ctx.fill();
                             
                             // Add a white border
                             ctx.strokeStyle = "white";
-                            ctx.lineWidth = 2;
+                            ctx.lineWidth = 3; // Thicker border
                             ctx.stroke();
                             
                             // Draw warning text
                             ctx.fillStyle = "#ffffff";
-                            ctx.font = "bold 24px Arial";
+                            ctx.font = "bold 28px Arial"; // Increased font size
                             ctx.textAlign = "center";
-                            ctx.fillText("SLOW DOWN", canvas.width/2, canvas.height/2 + 8);
+                            ctx.fillText("SLOW DOWN", canvas.width/2, canvas.height/2 + 10);
                             
                             ctx.restore();
                         }
@@ -767,26 +765,6 @@ export default function RepCounterPage() {
                          {/* ... Canvas Element ... */}
                          <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full object-contain z-10" style={{ backgroundColor: 'transparent' }} />
                     </div>
-
-                    {/* ... Debug info ... */}
-                     {debugMode && ( /* ... */
-                        <Card className="mb-6 bg-gray-800 text-gray-200 border-gray-700">
-                             <CardHeader className="py-2 px-4"><CardTitle className="text-base text-yellow-400">Debug Information</CardTitle></CardHeader>
-                             <CardContent className="text-xs space-y-1 px-4 pb-3">
-                                 <p>Cam Started: <span className={`font-mono ${isCameraStarted ? 'text-green-400' : 'text-red-400'}`}>{isCameraStarted?'Yes':'No'}</span></p>
-                                 <p>Processing: <span className={`font-mono ${isProcessing ? 'text-green-400' : 'text-red-400'}`}>{isProcessing?'Yes':'No'}</span></p>
-                                 <p>Model Loaded: <span className={`font-mono ${!isLoadingModel && poseLandmarkerRef.current ? 'text-green-400' : 'text-red-400'}`}>{!isLoadingModel && poseLandmarkerRef.current?'Yes':'No'}</span></p>
-                                 <p>Landmarker Ref: <span className="font-mono text-gray-400">{poseLandmarkerRef.current?'Exists':'Null'}</span></p>
-                                 <p>Last Angle: <span className="font-mono text-cyan-400">{lastAngle!==null?Math.round(lastAngle)+'°':'N/A'}</span></p>
-                                 <p>Curl Stage: <span className="font-mono text-orange-400">{curlStage||'N/A'}</span></p>
-                                 <p>Last Vid Time: <span className="font-mono text-purple-400">{lastVideoTimeRef.current.toFixed(2)}</span></p>
-                                 <p>Canvas Size: <span className="font-mono text-blue-400">{canvasRef.current?`${canvasRef.current.width}x${canvasRef.current.height}`:'N/A'}</span></p>
-                                 <p>Active Workout: <span className="font-mono text-green-400">{activeWorkout ? activeWorkout.name : 'None'}</span></p>
-                                 <p>Target Set: <span className="font-mono text-green-400">{curlSet ? `${curlSet.exercise.name} Set ${curlSet.set.set_number}` : 'None'}</span></p>
-                                 <p>Error: <span className="font-mono text-red-400">{errorMessage||'None'}</span></p>
-                             </CardContent>
-                         </Card>
-                     )}
 
                     {/* ... Controls ... */}
                     <div className="flex flex-wrap gap-3 mb-6 justify-center">
