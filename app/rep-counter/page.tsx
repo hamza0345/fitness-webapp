@@ -66,6 +66,12 @@ export default function RepCounterPage() {
     // Debug mode is now always on but UI element removed
     const debugMode = true;
     
+    // Track eccentric timing
+    const [eccentricTooFast, setEccentricTooFast] = useState(false);
+    const [eccentricStartTime, setEccentricStartTime] = useState<number | null>(null);
+    const [previousCurlStage, setPreviousCurlStage] = useState<"down" | "up" | null>(null);
+    const [warningTimer, setWarningTimer] = useState<number | null>(null);
+    
     /* ---------- refs ---------- */
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -164,12 +170,39 @@ export default function RepCounterPage() {
         }
     }, [repCount, addBicepCurls, updateSetReps]);
     
-    // Reset previous rep count when starting a new session
+    // Effect to reset previous rep count when starting a new session
     useEffect(() => {
         if (isCameraStarted) {
             previousRepCountRef.current = 0;
         }
     }, [isCameraStarted]);
+    
+    // Effect to handle eccentric countdown timer - Now removed since we're using direct detection
+    useEffect(() => {
+        if (isCameraStarted) {
+            previousRepCountRef.current = 0;
+        }
+    }, [isCameraStarted]);
+
+    // Effect to handle warning message persistence
+    useEffect(() => {
+        let timerId: NodeJS.Timeout | null = null;
+        
+        if (warningTimer !== null && warningTimer > 0) {
+            // Set warning to be visible
+            setEccentricTooFast(true);
+            
+            // Set timer to clear warning after specified duration
+            timerId = setTimeout(() => {
+                setEccentricTooFast(false);
+                setWarningTimer(null);
+            }, warningTimer);
+        }
+        
+        return () => {
+            if (timerId) clearTimeout(timerId);
+        };
+    }, [warningTimer]);
 
     /* ---------- helpers ---------- */
     const calculateAngle = useCallback((a: Point, b: Point, c: Point): number => {
@@ -258,14 +291,39 @@ export default function RepCounterPage() {
 
                         // Curl Counter Logic
                         if (angle > 160) {
+                            // If transitioning from up to down, record the start time of eccentric phase
+                            if (curlStage === "up" && previousCurlStage === "up") {
+                                console.log("Starting eccentric phase timer");
+                                setEccentricStartTime(performance.now());
+                            }
+                            
                             if (curlStage !== "down") console.log("predictWebcam: Stage changed to DOWN");
                             setCurlStage("down");
                         }
+                        
                         if (angle < 30 && curlStage === 'down') {
+                            // Measure the time it took to complete the eccentric phase
+                            if (eccentricStartTime !== null) {
+                                const eccentricTime = performance.now() - eccentricStartTime;
+                                console.log(`Eccentric phase completed in ${eccentricTime}ms`);
+                                
+                                // If the eccentric phase was completed too quickly, show warning
+                                // 750ms = 0.75 seconds (adjust this threshold as needed)
+                                if (eccentricTime < 750) {
+                                    console.log("Eccentric too fast! Showing warning");
+                                    setEccentricTooFast(true);
+                                    setWarningTimer(2000); // Show warning for 2 seconds
+                                }
+                            }
+                            
                             setCurlStage("up");
                             setRepCount(prev => prev + 1);
+                            setEccentricStartTime(null);
                             console.log("predictWebcam: Stage changed to UP - Rep Counted!");
                         }
+                        
+                        // Save the current stage for the next frame
+                        setPreviousCurlStage(curlStage);
 
                         // Visualize Angle
                         const elbowPixelX = (1 - elbowPoint.x) * canvas.width;
@@ -275,6 +333,39 @@ export default function RepCounterPage() {
                         ctx.fillStyle = "white"; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
                         ctx.fillText(Math.round(angle).toString() + "°", elbowPixelX, elbowPixelY - 10);
                         ctx.restore(); // Restore mirror for drawing
+                        
+                        // Display warning if eccentric is too fast
+                        if (eccentricTooFast) {
+                            ctx.save();
+                            ctx.translate(canvas.width, 0); ctx.scale(-1, 1); // Undo mirror for text
+                            
+                            // Create a more prominent semi-transparent background
+                            ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
+                            const textWidth = 180;
+                            const textHeight = 40;
+                            
+                            // Position in the center of the screen
+                            const warningX = canvas.width/2 - textWidth/2;
+                            const warningY = canvas.height/2 - textHeight/2;
+                            
+                            // Draw background with slight border radius effect
+                            ctx.beginPath();
+                            ctx.roundRect(warningX, warningY, textWidth, textHeight, 8);
+                            ctx.fill();
+                            
+                            // Add a white border
+                            ctx.strokeStyle = "white";
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                            
+                            // Draw warning text
+                            ctx.fillStyle = "#ffffff";
+                            ctx.font = "bold 24px Arial";
+                            ctx.textAlign = "center";
+                            ctx.fillText("SLOW DOWN", canvas.width/2, canvas.height/2 + 8);
+                            
+                            ctx.restore();
+                        }
                     } else {
                         // console.log("predictWebcam: Required landmarks not visible.", { shoulderVis: shoulder?.visibility, elbowVis: elbow?.visibility, wristVis: wrist?.visibility });
                         setLastAngle(null);
@@ -308,7 +399,7 @@ export default function RepCounterPage() {
         // The loop continuation is now handled by the useEffect hook below
         // No need to call requestAnimationFrame here anymore
 
-    }, [isProcessing, calculateAngle, curlStage]); // Removed lastVideoTimeRef dependency
+    }, [isProcessing, calculateAngle, curlStage, eccentricTooFast, eccentricStartTime, previousCurlStage, warningTimer]); // Added warning timer dependency
 
 
     // NEW useEffect hook to manage the animation loop based on isProcessing state
@@ -566,6 +657,10 @@ export default function RepCounterPage() {
         setRepCount(0);
         setExerciseTime(0);
         setCurlStage(null);
+        setPreviousCurlStage(null);
+        setEccentricStartTime(null);
+        setEccentricTooFast(false);
+        setWarningTimer(null);
         setLastAngle(null);
         stopTimer();
         if (isProcessing) { // Restart timer only if processing was active
