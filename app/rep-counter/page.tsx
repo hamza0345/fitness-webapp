@@ -30,12 +30,12 @@ import { useWorkout } from "@/context/WorkoutContext";
 import { toast } from "sonner";
 import { WorkoutExercise, WorkoutSet } from "@/lib/api";
 
-/* ---- landmark indices ---- */
+// indicies
 const LEFT_SHOULDER = 11;
 const LEFT_ELBOW = 13;
 const LEFT_WRIST = 15;
 
-/* ---------- types ---------- */
+
 // Define the CurlSetInfo interface to match what's in WorkoutContext
 interface CurlSetInfo {
     exerciseIndex: number;
@@ -387,7 +387,7 @@ export default function RepCounterPage() {
         ctx.restore(); // Go back to non-mirrored drawing
         ctx.save();
         if (curlStage) {
-            ctx.fillStyle = curlStage === "up" ? "#4ade80" : "#facc15";
+            ctx.fillStyle = curlStage === "up" ? "#f9a8d4" : "#fcd34d";
             ctx.font = "bold 24px Arial"; ctx.textAlign = "left";
             ctx.fillText(curlStage.toUpperCase(), 20, canvas.height - 20);
         }
@@ -679,18 +679,18 @@ export default function RepCounterPage() {
         <div className="container mx-auto p-4 md:p-8 max-w-7xl">
             {/* Header */}
             <header className="mb-6">
-                <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4">
+                <Link href="/" className="inline-flex items-center gap-2 text-primary hover:text-primary/80 mb-4">
                     <ArrowLeft size={16} />
                     <span>Back to Home</span>
                 </Link>
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-3xl font-bold">Rep Counter</h1>
-                        <p className="text-gray-500">Count your bicep curls automatically with computer vision</p>
+                        <p className="text-foreground/70">Count your bicep curls automatically with computer vision</p>
                     </div>
                     {/* Active workout indicator */}
                     {activeWorkout && (
-                        <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                        <div className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm font-medium">
                             Active Workout: {activeWorkout.name}
                         </div>
                     )}
@@ -698,13 +698,13 @@ export default function RepCounterPage() {
                 
                 {/* Target set information */}
                 {curlSet && (
-                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3 flex items-center gap-3">
-                        <Dumbbell className="h-5 w-5 text-blue-500" />
+                    <div className="mt-3 bg-accent/20 border border-accent/30 rounded p-3 flex items-center gap-3">
+                        <Dumbbell className="h-5 w-5 text-accent" />
                         <div>
-                            <p className="font-medium text-blue-700">
+                            <p className="font-medium text-accent-foreground">
                                 Target: {curlSet.exercise.name}, Set {curlSet.set.set_number}
                             </p>
-                            <p className="text-sm text-blue-600">
+                            <p className="text-sm text-accent-foreground/80">
                                 Current tracking will be added to this set
                             </p>
                         </div>
@@ -715,14 +715,14 @@ export default function RepCounterPage() {
             {/* Tabs */}
             <div className="flex border-b mb-6">
                 <button
-                    className={`px-4 py-2 ${activeTab === "live" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"
+                    className={`px-4 py-2 ${activeTab === "live" ? "border-b-2 border-primary text-primary font-semibold" : "text-foreground/70 hover:text-foreground"
                         }`}
                     onClick={() => setActiveTab("live")}
                 >
                     Live Camera
                 </button>
                 <button
-                    className={`px-4 py-2 ${activeTab === "tutorial" ? "border-b-2 border-green-500 text-green-600 font-semibold" : "text-gray-500 hover:text-gray-700"
+                    className={`px-4 py-2 ${activeTab === "tutorial" ? "border-b-2 border-primary text-primary font-semibold" : "text-foreground/70 hover:text-foreground"
                         }`}
                     onClick={() => setActiveTab("tutorial")}
                 >
@@ -733,12 +733,12 @@ export default function RepCounterPage() {
             {activeTab === "live" ? (
                 <div>
                     {/* Video and canvas container */}
-                    <div className="relative aspect-video bg-gray-900 rounded-lg shadow-lg mb-6 overflow-hidden border border-gray-700">
+                    <div className="relative aspect-video bg-secondary/30 rounded shadow-md mb-6 overflow-hidden border-2 border-secondary">
                          {/* ... Loading Indicator ... */}
                           {isLoadingModel && ( /* ... */
                              <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/70">
                                  <div className="text-center">
-                                     <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-green-500" />
+                                     <Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-primary" />
                                      <p className="text-white text-lg font-semibold">Loading Pose Model...</p>
                                      <p className="text-gray-300">This may take a moment.</p>
                                  </div>
@@ -746,18 +746,18 @@ export default function RepCounterPage() {
                           )}
                          {/* ... Start Button / Error Message Overlay ... */}
                          {!isLoadingModel && !isCameraStarted && ( /* ... */
-                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-gray-900/90 p-4">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-secondary/90 p-4">
                                  {errorMessage && (
-                                    <div className="bg-red-600/90 text-white p-3 rounded-md mb-4 max-w-md text-center shadow-lg">
+                                    <div className="bg-destructive/80 text-destructive-foreground p-3 rounded-md mb-4 max-w-md text-center shadow-md">
                                          <AlertCircle className="h-6 w-6 mx-auto mb-2" />
                                          <p className="font-semibold">Error</p>
                                          <p className="text-sm">{errorMessage}</p>
                                      </div>
                                  )}
-                                 <Button onClick={startCameraAndProcessing} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md" disabled={isLoadingModel || !!errorMessage}>
+                                 <Button onClick={startCameraAndProcessing} className="bg-primary hover:bg-primary/80 text-primary-foreground font-bold py-3 px-6 shadow-md" disabled={isLoadingModel || !!errorMessage}>
                                      <Camera className="mr-2 h-5 w-5" /> Start Camera
                                  </Button>
-                                 <p className="text-gray-400 text-sm mt-3">Allow camera access when prompted.</p>
+                                 <p className="text-foreground/70 text-sm mt-3">Allow camera access when prompted.</p>
                              </div>
                          )}
                          {/* ... Video Element ... */}
@@ -773,44 +773,88 @@ export default function RepCounterPage() {
                                  {isProcessing ? (
                                      <Button variant="secondary" onClick={pauseProcessing} className="shadow"><Pause className="mr-2 h-4 w-4" /> Pause</Button>
                                  ) : (
-                                     <Button variant="secondary" onClick={resumeProcessing} className="shadow bg-blue-500 hover:bg-blue-600 text-white"><Play className="mr-2 h-4 w-4" /> Resume</Button>
+                                     <Button variant="secondary" onClick={resumeProcessing} className="shadow bg-accent hover:bg-accent/80 text-accent-foreground"><Play className="mr-2 h-4 w-4" /> Resume</Button>
                                  )}
                                  <Button variant="outline" onClick={resetCounterState} className="shadow"><RotateCcw className="mr-2 h-4 w-4" /> Reset</Button>
                                  <Button variant="destructive" onClick={() => stopProcessingAndCamera()} className="shadow"><VideoOff className="mr-2 h-4 w-4" /> Stop Camera</Button>
                              </>
                          ) : (
-                            !isLoadingModel && <Button onClick={startCameraAndProcessing} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow-md" disabled={isLoadingModel || !!errorMessage}><Camera className="mr-2 h-4 w-4" /> Start Camera</Button>
+                            !isLoadingModel && <Button onClick={startCameraAndProcessing} className="bg-primary hover:bg-primary/80 text-primary-foreground font-bold py-2 px-4 shadow-md" disabled={isLoadingModel || !!errorMessage}><Camera className="mr-2 h-4 w-4" /> Start Camera</Button>
                          )}
                      </div>
 
                     {/* ... Statistics and feedback ... */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                          {/* ... Reps Card ... */}
-                          <Card className="shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">REPS</CardTitle></CardHeader><CardContent><div className="text-5xl font-bold text-gray-900">{repCount}</div></CardContent></Card>
-                          {/* ... Time Card ... */}
-                           <Card className="shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">TIME</CardTitle></CardHeader><CardContent><div className="text-5xl font-bold text-gray-900">{formatTime(exerciseTime)}</div></CardContent></Card>
+                          {/* Reps Card */}
+                          <Card className="shadow-sm bg-primary/10 border-2 border-primary/30">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm font-medium text-primary flex items-center gap-2">
+                                <RefreshCw className="h-4 w-4" /> REPS
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="text-5xl font-bold text-primary">{repCount}</div>
+                            </CardContent>
+                          </Card>
+                          {/* Time Card */}
+                           <Card className="shadow-sm bg-accent/10 border-2 border-accent/30">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm font-medium text-accent flex items-center gap-2">
+                                <Square className="h-4 w-4" /> TIME
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="text-5xl font-bold text-accent">{formatTime(exerciseTime)}</div>
+                            </CardContent>
+                          </Card>
                      </div>
 
                     {/* ... Tips Card ... */}
-                     <Card className="bg-blue-50 border border-blue-200 shadow-sm">
-                         <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base text-blue-700"><Info size={18} className="text-blue-500" /> Tips for Best Results</CardTitle></CardHeader>
-                         <CardContent><ul className="list-disc pl-5 space-y-1 text-sm text-blue-800">{/* ... Tips list items ... */}
-                             <li>Ensure your **left arm** (shoulder, elbow, wrist) is clearly visible.</li><li>Use good, consistent lighting. Avoid backlighting.</li><li>Wear clothing that contrasts with the background.</li><li>Perform curls at a steady, controlled pace.</li><li>Stand 4-6 feet away, allowing your upper body and arm to be in frame.</li><li>Keep your elbow relatively stable during the curl motion.</li><li>If detection seems off, try resetting or adjusting your position/lighting.</li>
+                     <Card className="bg-secondary/20 border border-secondary/50 shadow-sm">
+                         <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base text-primary"><Info size={18} className="text-primary" /> Tips for Best Results</CardTitle></CardHeader>
+                         <CardContent><ul className="list-disc pl-5 space-y-2 text-foreground font-medium">
+                             <li>Ensure your <strong>left arm</strong> (shoulder, elbow, wrist) is clearly visible.</li>
+                             <li>Use good, consistent lighting. Avoid backlighting.</li>
+                             <li>Wear clothing that contrasts with the background.</li>
+                             <li>Perform curls at a steady, controlled pace.</li>
+                             <li>Stand 4-6 feet away, allowing your upper body and arm to be in frame.</li>
+                             <li>Keep your elbow relatively stable during the curl motion.</li>
+                             <li>If detection seems off, try resetting or adjusting your position/lighting.</li>
                          </ul></CardContent>
                      </Card>
                 </div>
             ) : (
                  <div>{/* ... Tutorial Tab Content ... */}
                       <Card className="shadow-sm">
-                         <CardHeader><CardTitle>How to Use the Rep Counter</CardTitle><CardDescription>Follow these steps...</CardDescription></CardHeader>
-                         <CardContent className="space-y-4">{/* ... Tutorial Steps ... */}
-                             <div className="space-y-2"><h3 className="font-semibold">1. Prepare Your Space</h3><p className="text-sm text-gray-700">Find a well-lit area...</p></div>
-                             <div className="space-y-2"><h3 className="font-semibold">2. Position Yourself</h3><p className="text-sm text-gray-700">Place your device... **left side** visible...</p></div>
-                             <div className="space-y-2"><h3 className="font-semibold">3. Start the Camera</h3><p className="text-sm text-gray-700">Click "Start Camera"... Grant permission...</p></div>
-                             <div className="space-y-2"><h3 className="font-semibold">4. Begin Exercising</h3><p className="text-sm text-gray-700">Once the camera feed appears... start performing curls...</p></div>
-                             <div className="space-y-2"><h3 className="font-semibold">5. Use Controls</h3><p className="text-sm text-gray-700">Use 'Pause'/'Resume', 'Reset', 'Stop Camera'.</p></div>
+                         <CardHeader>
+                           <CardTitle>How to Use the Rep Counter</CardTitle>
+                           <CardDescription>Follow these steps</CardDescription>
+                         </CardHeader>
+                         <CardContent className="space-y-4">
+                             <div className="space-y-2">
+                                 <h3 className="font-semibold text-primary text-base">1. Prepare Your Space</h3>
+                                 <p className="text-foreground font-medium">Find a well-lit area with a plain background if possible.</p>
+                             </div>
+                             <div className="space-y-2">
+                                 <h3 className="font-semibold text-primary text-base">2. Position Yourself</h3>
+                                 <p className="text-foreground font-medium">Place your device so your <strong>left side</strong> is clearly visible in the frame.</p>
+                             </div>
+                             <div className="space-y-2">
+                                 <h3 className="font-semibold text-primary text-base">3. Start the Camera</h3>
+                                 <p className="text-foreground font-medium">Click "Start Camera" and grant camera access when prompted.</p>
+                             </div>
+                             <div className="space-y-2">
+                                 <h3 className="font-semibold text-primary text-base">4. Begin Exercising</h3>
+                                 <p className="text-foreground font-medium">Once the camera is running, start performing bicep curls at a moderate pace.</p>
+                             </div>
+                             <div className="space-y-2">
+                                 <h3 className="font-semibold text-primary text-base">5. Use Controls</h3>
+                                 <p className="text-foreground font-medium">Use the buttons to pause, resume, reset the counter, or stop the camera.</p>
+                             </div>
                          </CardContent>
-                         <CardFooter><Button onClick={() => setActiveTab("live")} className="w-full bg-green-600 hover:bg-green-700">Go to Live Camera</Button></CardFooter>
+                         <CardFooter>
+                           <Button onClick={() => setActiveTab("live")} className="w-full">Go to Live Camera</Button>
+                         </CardFooter>
                       </Card>
                  </div>
             )}

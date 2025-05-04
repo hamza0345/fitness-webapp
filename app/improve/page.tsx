@@ -35,7 +35,7 @@ export default function ImproveProgramPage() {
   const { toast } = useToast();
 
   // Fetch routines on component mount
-  useEffect(() => {
+  useEffect(() => {           
     const fetchUserRoutines = async () => {
       setIsLoadingRoutines(true);
       setError(null);
@@ -110,8 +110,8 @@ export default function ImproveProgramPage() {
 
   // Function to mark an improvement as 'applied' (client-side only for now)
   const applyImprovement = (improvementId: number) => {
-     // In a real scenario, this might trigger a backend update to the routine
-     // For now, just track it visually on the client
+     //  this might trigger a backend update to the routine
+     
     setUpdatedExercises([...updatedExercises, improvementId]);
      toast({
         title: "Improvement Applied",
