@@ -8,13 +8,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select
 import { Label } from "@/components/ui/label"; // Import Label
 import { Dumbbell, ArrowLeft, CheckCircle, AlertCircle, ArrowRight, Beaker, RefreshCw, Info } from "lucide-react";
-import { getRoutines, analyzeRoutine, RoutineWithEx, ImprovementSuggestion } from "@/lib/api"; // Import API functions and types
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { getRoutines, analyzeRoutine, updateRoutineFull, RoutineWithEx, RoutineExercise, ImprovementSuggestion } from "@/lib/api"; // Import API functions and types
+import { useToast } from "@/components/ui/use-toast"; // Import useToast
 
 // Define preference options
 const FOCUS_OPTIONS = [
-  { value: "hypertrophy", label: "Hypertrophy (Muscle Growth)" },
-  { value: "powerlifting", label: "Powerlifting (Max Strength)" },
+  { value: "general_fitness", label: "General Fitness" },
+  { value: "hypertrophy", label: "Muscle Growth (Hypertrophy)" },
+  { value: "powerlifting", label: "Strength & Power" },
+  { value: "injury_prevention", label: "Injury Prevention & Recovery" },
 ];
 
 export default function ImproveProgramPage() {
@@ -109,14 +111,101 @@ export default function ImproveProgramPage() {
   };
 
   // Function to mark an improvement as 'applied' (client-side only for now)
-  const applyImprovement = (improvementId: number) => {
-     //  this might trigger a backend update to the routine
-     
-    setUpdatedExercises([...updatedExercises, improvementId]);
-     toast({
-        title: "Improvement Applied",
-        description: "Marked as applied. Remember to save changes to your routine elsewhere if needed.", // Reminder that this is visual
-    });
+  const applyImprovement = async (improvementId: number) => {
+    if (!selectedRoutine || !analysisResults) return;
+    
+    // Find the improvement suggestion by ID
+    const improvement = analysisResults.find(imp => imp.id === improvementId);
+    if (!improvement) {
+      toast({
+        title: "Error",
+        description: "Could not find improvement details.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      // Get a fresh copy of the routine to update
+      const routineToUpdate = {...selectedRoutine};
+      
+      // Handle different action types
+      if (improvement.action_type === 'replace' && improvement.trigger_exercise_name && improvement.newExercise) {
+        // Find the exercise to replace
+        const exerciseIndex = routineToUpdate.exercises.findIndex(
+          ex => ex.name.toLowerCase() === improvement.trigger_exercise_name.toLowerCase()
+        );
+        
+        if (exerciseIndex >= 0) {
+          // Replace the exercise name but keep other properties like sets, reps, weight
+          routineToUpdate.exercises[exerciseIndex] = {
+            ...routineToUpdate.exercises[exerciseIndex],
+            name: improvement.newExercise
+          };
+          
+          // Update the routine
+          await updateRoutineFull(routineToUpdate.id!, routineToUpdate);
+          
+          // Update local state
+          setRoutines(prev => prev.map(r => r.id === routineToUpdate.id ? routineToUpdate : r));
+          setSelectedRoutine(routineToUpdate);
+          
+          // Mark as applied
+          setUpdatedExercises([...updatedExercises, improvementId]);
+          
+          toast({
+            title: "Improvement Applied",
+            description: `Successfully replaced "${improvement.trigger_exercise_name}" with "${improvement.newExercise}"`,
+          });
+        } else {
+          toast({
+            title: "Warning",
+            description: `Could not find exercise "${improvement.trigger_exercise_name}" in the routine.`,
+            variant: "destructive",
+          });
+        }
+      } else if (improvement.action_type === 'add' && improvement.addExercise) {
+        // Add the suggested exercise
+        const newExercise: RoutineExercise = {
+          name: improvement.addExercise,
+          sets: improvement.sets ? parseInt(improvement.sets) : 3, // default to 3 sets
+          reps: improvement.reps ? parseInt(improvement.reps) : 10, // default to 10 reps
+          weight: 0, // default weight
+          order: routineToUpdate.exercises.length // Add at the end
+        };
+        
+        routineToUpdate.exercises.push(newExercise);
+        
+        // Update the routine
+        await updateRoutineFull(routineToUpdate.id!, routineToUpdate);
+        
+        // Update local state
+        setRoutines(prev => prev.map(r => r.id === routineToUpdate.id ? routineToUpdate : r));
+        setSelectedRoutine(routineToUpdate);
+        
+        // Mark as applied
+        setUpdatedExercises([...updatedExercises, improvementId]);
+        
+        toast({
+          title: "Improvement Applied",
+          description: `Successfully added "${improvement.addExercise}" to your routine.`,
+        });
+      } else {
+        // Handle other action types or invalid data
+        setUpdatedExercises([...updatedExercises, improvementId]);
+        toast({
+          title: "Improvement Marked",
+          description: "This type of improvement requires manual application. Please update your routine accordingly.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to apply improvement:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to apply improvement to routine.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
