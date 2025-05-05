@@ -406,7 +406,13 @@ export default function TrackerPage() {
         savedEntry = await createNutritionEntry(nutritionData);
         setNutritionEntries(prev => [savedEntry, ...prev]);
       }
-      processNutritionHistory(nutritionEntries.map(e => e.id === savedEntry.id ? savedEntry : e)); // Re-process with updated entry
+      // Problem: We're using the old nutritionEntries state here, not the updated one
+      // Fix: Create a new array with the updated entries to pass to processNutritionHistory
+      const updatedEntries = existingEntry?.id 
+        ? nutritionEntries.map(e => e.id === savedEntry.id ? savedEntry : e)
+        : [savedEntry, ...nutritionEntries];
+      
+      processNutritionHistory(updatedEntries);
 
       setNewFood({ name: '', calories: 0, protein: 0 }); // Reset form
       toast.success("Food added successfully");
@@ -452,7 +458,11 @@ export default function TrackerPage() {
           };
           const savedEntry = await updateNutritionEntry(existingEntry.id, nutritionData);
           setNutritionEntries(prev => prev.map(entry => entry.id === existingEntry.id ? savedEntry : entry));
-           processNutritionHistory(nutritionEntries.map(e => e.id === savedEntry.id ? savedEntry : e)); // Re-process with updated entry
+          
+          // Create a new array with the updated entries to pass to processNutritionHistory
+          const updatedEntries = nutritionEntries.map(e => e.id === savedEntry.id ? savedEntry : e);
+          processNutritionHistory(updatedEntries);
+          
           toast.success("Food item removed");
         } else {
            // If no entry existed, something is wrong, but we already updated UI
