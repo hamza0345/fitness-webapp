@@ -1,8 +1,11 @@
-# backend/api/exercise_data.py
-
-# --- Predefined Exercises ---
-# Format: (name, muscle_group, type, equipment)
 PREDEFINED_EXERCISES = [
+    # Generic exercise names that users might enter
+    ("Bench Press", "Chest", "Compound", "Barbell/Dumbbell"),
+    ("Squat", "Legs", "Compound", "Barbell/Bodyweight"),
+    ("Deadlift", "Back", "Compound", "Barbell"),
+    ("Bicep Curl", "Biceps", "Isolation", "Barbell/Dumbbell"),
+    ("Shoulder Press", "Shoulders", "Compound", "Barbell/Dumbbell"),
+    
     # Chest
     ("Barbell Bench Press", "Chest", "Compound", "Barbell"),
     ("Dumbbell Bench Press", "Chest", "Compound", "Dumbbell"),
@@ -23,7 +26,6 @@ PREDEFINED_EXERCISES = [
     ("T-Bar Row", "Back", "Compound", "Barbell/Machine"),
     ("Seated Cable Row", "Back", "Compound", "Cable"),
     ("Face Pull", "Shoulders", "Isolation", "Cable"), # Often included on back/pull days for shoulder health
-    ("Deadlift", "Back", "Compound", "Barbell"), # Full body, but heavy back focus
 
     # Shoulders
     ("Overhead Press (Barbell)", "Shoulders", "Compound", "Barbell"),
@@ -37,7 +39,6 @@ PREDEFINED_EXERCISES = [
     ("Reverse Pec Deck", "Shoulders", "Isolation", "Machine"),
 
     # Legs
-    ("Barbell Squat", "Legs", "Compound", "Barbell"),
     ("Front Squat", "Legs", "Compound", "Barbell"),
     ("Leg Press", "Legs", "Compound", "Machine"),
     ("Romanian Deadlift", "Legs", "Compound", "Barbell"),
@@ -71,15 +72,32 @@ PREDEFINED_EXERCISES = [
     ("Cable Crunch", "Core", "Isolation", "Cable"),
 ]
 
-# --- Improvement Rules ---
-# Format: (trigger_exercise_name, suggested_exercise_name, preference_focus, reason, source, action_type, modification_details)
-# preference_focus can be: 'hypertrophy', 'powerlifting', 'general_fitness', 'injury_prevention', 'all'
-# action_type can be: 'replace', 'add', 'modify_technique'
+
 IMPROVEMENT_RULES = [
+    # Bench Press variants - very common exercise
+    (
+        "Bench Press",  # More generic name that might be used by users
+        "Incline Dumbbell Press",
+        "hypertrophy",
+        "Incline Dumbbell Press allows for a greater range of motion and stretch on the upper pectoral fibers, potentially leading to better hypertrophy in that region. Dumbbells also require more stabilization.",
+        "Exercise science studies on muscle activation",
+        "replace",
+        None,
+    ),
+    (
+        "Bench Press",  # Same as above but for powerlifting focus
+        "Close-Grip Bench Press",
+        "powerlifting",
+        "Close-Grip Bench Press can help build triceps strength which is often a limiting factor in bench press performance for powerlifters. It also places less stress on the shoulders.",
+        "Powerlifting technique research",
+        "replace",
+        None,
+    ),
+    # Original rules
     (
         "Upright Row (Barbell)",
         "Face Pull",
-        "injury_prevention",
+        "powerlifting",
         "Barbell Upright Rows internally rotate the shoulder under load, increasing impingement risk. Face Pulls target rear deltoids and external rotators, improving posture and shoulder health.",
         "Multiple physio & biomechanics sources",
         "replace",
@@ -112,34 +130,46 @@ IMPROVEMENT_RULES = [
         "replace",
         None,
     ),
+    # Squat variations - another very common exercise
     (
-        "Barbell Bench Press",
-        "Dumbbell Bench Press",
-        "general_fitness",
-        "Dumbbell Bench Press allows for a more natural range of motion and requires greater stabilization, potentially improving functional strength and reducing muscle imbalances compared to the fixed barbell path.",
-        "Functional training principles",
+        "Squat",  # Generic squats that users might enter
+        "Front Squat",
+        "hypertrophy",
+        "Front Squats place more emphasis on the quadriceps and require a more upright torso position, which can be beneficial for athletes looking to build quad size and maintain proper posture.",
+        "Biomechanical analysis of squat variations",
         "replace",
         None,
     ),
     (
-        "Leg Extension",
-        "Barbell Squat",
-        "general_fitness",
-        "Leg extensions isolate the quadriceps but are an open-chain exercise with less functional carryover. Squats are a compound, closed-chain exercise engaging multiple leg muscles and improving overall lower body strength and coordination.",
-        "Compound vs Isolation exercise benefits",
+        "Squat",  # Same for powerlifting
+        "Low-Bar Squat",
+        "powerlifting",
+        "The low-bar squat position typically allows for greater loading due to favorable leverages and biomechanics, making it a preferred variation for powerlifters aiming to maximize strength.",
+        "Powerlifting competition analysis",
         "replace",
         None,
     ),
-    ( # Example: Adding an exercise
-        "Barbell Bench Press", # Trigger exercise (just needs *any* exercise from the routine)
-        "Face Pull",
-        "injury_prevention",
-        "Adding Face Pulls (2-3 sets, 12-15 reps) to routines heavy on pressing movements helps balance shoulder development by strengthening rear deltoids and external rotators, reducing injury risk.",
-        "Shoulder health protocols",
-        "add", # Action type is 'add'
-        "Add 2-3 sets of 12-15 reps, typically towards the end of your workout.", # Details for 'add' or 'modify'
+    # Bicep work - virtually everyone does some form of bicep exercise
+    (
+        "Bicep Curl", 
+        "Hammer Curl",
+        "hypertrophy",
+        "Hammer Curls target the brachialis and brachioradialis in addition to the biceps brachii, potentially leading to fuller arm development and greater overall arm size.",
+        "Muscle activation studies",
+        "replace",
+        None,
     ),
-     ( # Example: Modifying technique
+    (
+        "Bicep Curl",
+        "Weighted Chin-Up",
+        "powerlifting",
+        "Weighted Chin-Ups are a compound movement that engages more muscle mass and allows for progressive overload more effectively than isolated curls, making them better suited for strength development.",
+        "Strength training principles",
+        "replace",
+        None,
+    ),
+    # Deadlift improvements - fundamental compound exercise
+    (
         "Deadlift",
         None, # No suggested exercise replacement
         "powerlifting",
@@ -149,9 +179,46 @@ IMPROVEMENT_RULES = [
         "Focus on core bracing and lat engagement before initiating the lift. Maintain neutral spine.",
     ),
     (
+        "Deadlift",
+        "Romanian Deadlift",
+        "hypertrophy",
+        "Romanian Deadlifts place greater emphasis on the hamstrings and glutes compared to conventional deadlifts, leading to better posterior chain development when hypertrophy is the main goal.",
+        "Research on muscle activation patterns",
+        "replace",
+        None,
+    ),
+    # Previous rules continuing
+    (
+        "Barbell Bench Press",
+        "Dumbbell Bench Press",
+        "powerlifting",
+        "Dumbbell Bench Press allows for a more natural range of motion and requires greater stabilization, potentially improving functional strength and reducing muscle imbalances compared to the fixed barbell path.",
+        "Functional training principles",
+        "replace",
+        None,
+    ),
+    (
+        "Leg Extension",
+        "Barbell Squat",
+        "powerlifting",
+        "Leg extensions isolate the quadriceps but are an open-chain exercise with less functional carryover. Squats are a compound, closed-chain exercise engaging multiple leg muscles and improving overall lower body strength and coordination.",
+        "Compound vs Isolation exercise benefits",
+        "replace",
+        None,
+    ),
+    ( # Example: Adding an exercise
+        "Barbell Bench Press", # Trigger exercise (just needs *any* exercise from the routine)
+        "Face Pull",
+        "powerlifting",
+        "Adding Face Pulls (2-3 sets, 12-15 reps) to routines heavy on pressing movements helps balance shoulder development by strengthening rear deltoids and external rotators, reducing injury risk.",
+        "Shoulder health protocols",
+        "add", # Action type is 'add'
+        "Add 2-3 sets of 12-15 reps, typically towards the end of your workout.", # Details for 'add' or 'modify'
+    ),
+    (
         "Crunch",
         "Plank",
-        "general_fitness",
+        "hypertrophy",
         "Crunches involve repeated spinal flexion which may not be ideal long-term. Planks build core stability isometrically, which has better carryover to athletic movements and maintaining posture.",
         "Core training research (e.g., Stuart McGill)",
         "replace",

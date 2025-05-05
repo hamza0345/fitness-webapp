@@ -13,10 +13,8 @@ import { useToast } from "@/components/ui/use-toast"; // Import useToast
 
 // Define preference options
 const FOCUS_OPTIONS = [
-  { value: "general_fitness", label: "General Fitness" },
   { value: "hypertrophy", label: "Muscle Growth (Hypertrophy)" },
-  { value: "powerlifting", label: "Strength & Power" },
-  { value: "injury_prevention", label: "Injury Prevention & Recovery" },
+  { value: "powerlifting", label: "Strength & Power" }
 ];
 
 export default function ImproveProgramPage() {
@@ -31,7 +29,7 @@ export default function ImproveProgramPage() {
 
   // User Preferences State
   const [preferences, setPreferences] = useState<{ focus: string }>({
-    focus: FOCUS_OPTIONS[0].value, // Default to General Fitness
+    focus: FOCUS_OPTIONS[0].value, // Default to Hypertrophy
   });
 
   const { toast } = useToast();
@@ -339,6 +337,16 @@ export default function ImproveProgramPage() {
                                 Based on scientific principles and your selected focus, we've identified{' '}
                                 <span className="font-semibold">{analysisResults.length}</span> potential improvement(s).
                             </p>
+                            {/* Display exercise names for debugging */}
+                            <details className="mt-2 text-xs">
+                              <summary className="cursor-pointer text-blue-600 dark:text-blue-500">Debug: Exercise Names</summary>
+                              <div className="mt-2 pl-2 text-blue-600 dark:text-blue-500">
+                                <div className="mb-2">Focus: {preferences.focus} ({FOCUS_OPTIONS.find(o => o.value === preferences.focus)?.label})</div>
+                                {selectedRoutine.exercises.map((ex, i) => (
+                                  <div key={i}>{i+1}. {ex.name}</div>
+                                ))}
+                              </div>
+                            </details>
                        </div>
 
                        {/* Optionally display current exercises again if needed */}

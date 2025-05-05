@@ -592,22 +592,32 @@ export async function getPredefinedExercises(): Promise<PredefinedExercise[]> {
 export async function analyzeRoutine(routineId: number, preferences: { focus: string }): Promise<ImprovementSuggestion[]> {
     const token = getToken();
     if (!token) throw new Error("Not authenticated");
+    
+    console.log(`Analyzing routine ${routineId} with focus: ${preferences.focus}`);
 
-    const res = await fetch(`${API_URL}/routines/${routineId}/analyze/`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ preferences }),
-    });
+    try {
+        const res = await fetch(`${API_URL}/routines/${routineId}/analyze/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ preferences }),
+        });
 
-    if (!res.ok) {
-         const errorData = await res.json().catch(() => ({ detail: "Failed to analyze routine" }));
-         console.error("Analyze routine error:", errorData);
-         throw new Error(errorData.detail || JSON.stringify(errorData) || "Failed to analyze routine");
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ detail: "Failed to analyze routine" }));
+            console.error("Analyze routine error:", errorData);
+            throw new Error(errorData.detail || JSON.stringify(errorData) || "Failed to analyze routine");
+        }
+        
+        const data = await res.json();
+        console.log(`Analysis complete. Found ${data.length} improvement suggestions.`);
+        return data;
+    } catch (error) {
+        console.error("Error in analyzeRoutine:", error);
+        throw error;
     }
-    return res.json();
 }
 
 

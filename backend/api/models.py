@@ -90,6 +90,43 @@ class PredefinedExercise(models.Model):
 
     def __str__(self):
         return self.name
+        
+    @classmethod
+    def find_matches(cls, exercise_name):
+        """
+        Find PredefinedExercise objects that match or are similar to the given exercise name.
+        Uses multiple matching strategies for better results.
+        """
+        from django.db.models import Q
+        import re
+        
+        # Clean up the input name
+        clean_name = re.sub(r'[^\w\s]', '', exercise_name).lower()
+        
+        # 1. Try exact match
+        exact_matches = cls.objects.filter(name__iexact=exercise_name)
+        if exact_matches.exists():
+            return exact_matches
+            
+        # 2. Try word boundary matches (for each word in the exercise name)
+        words = clean_name.split()
+        word_boundary_q = Q()
+        for word in words:
+            if len(word) > 3:  # Only use words longer than 3 chars to avoid matches on "the", "and", etc.
+                regex_pattern = r'\b' + re.escape(word) + r'\b'
+                word_boundary_q |= Q(name__iregex=regex_pattern)
+        
+        word_matches = cls.objects.filter(word_boundary_q)
+        if word_matches.exists():
+            return word_matches
+            
+        # 3. Finally try contains match (least precise)
+        contains_matches = cls.objects.filter(name__icontains=clean_name)
+        if contains_matches.exists():
+            return contains_matches
+            
+        # If no matches, return empty queryset
+        return cls.objects.none()
 
     class Meta:
         ordering = ['name']

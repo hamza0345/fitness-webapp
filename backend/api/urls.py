@@ -11,6 +11,7 @@ from .views import (
     # Add new views
     PredefinedExerciseListView,
     AnalyzeRoutineView,
+    DiagnosticView,
 )
 import re # Import re here if not already imported in views
 
@@ -25,6 +26,9 @@ urlpatterns = [
 
     # predefined exercises
     path("exercises/predefined/", PredefinedExerciseListView.as_view(), name="predefined-exercise-list"), # New
+
+    # diagnostic
+    path("diagnostic/", DiagnosticView.as_view(), name="diagnostic"),
 
     # workouts
     path("workouts/", WorkoutSessionListCreateView.as_view(), name="workout-list-create"),

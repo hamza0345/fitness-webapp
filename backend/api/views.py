@@ -151,41 +151,88 @@ class AnalyzeRoutineView(APIView):
             logger.info(f"Successfully fetched routine '{routine.name}' (ID: {routine.id})")
 
             preferences = request.data.get('preferences', {})
-            user_focus = preferences.get('focus', 'general_fitness').lower() # Default preference if not provided
+            user_focus = preferences.get('focus', 'hypertrophy').lower() # Default preference if not provided
             logger.info(f"Using preference focus: '{user_focus}'")
+            
+            # Map frontend focus names to database values if needed
+            # This fixes issues with focus option changes
+            focus_mapping = {
+                'hypertrophy': ['hypertrophy', 'all'],
+                'powerlifting': ['powerlifting', 'all'],
+                # Handle potential legacy values from frontend
+                'muscle growth (hypertrophy)': ['hypertrophy', 'all'],
+                'strength & power': ['powerlifting', 'all']
+            }
+            
+            # Get valid focus values to match in database - default to all valid options if focus not found
+            valid_focus_values = focus_mapping.get(user_focus, ['hypertrophy', 'powerlifting', 'all'])
+            logger.info(f"Valid focus values to match in DB: {valid_focus_values}")
 
             # 2. Get exercises from the user's routine
             # Access related exercises via the related_name 'exercises' defined in Exercise model
             routine_exercises = routine.exercises.all()
             routine_exercise_names = list(routine_exercises.values_list('name', flat=True))
-            logger.debug(f"Routine contains exercises: {routine_exercise_names}")
+            logger.info(f"Routine contains exercises: {routine_exercise_names}")
 
             if not routine_exercise_names:
                  logger.warning(f"Routine {routine_id} has no exercises. Returning empty suggestion list.")
                  return Response([], status=status.HTTP_200_OK) # Return empty list
 
-            # 3. Find matching PredefinedExercise IDs (case-insensitive, whole word)
-            # This improved regex helps avoid matching "Press" in both "Bench Press" and "Leg Press" if user typed just "Press"
-            regex_pattern = r'(' + '|'.join(map(lambda x: r'\b' + re.escape(x) + r'\b', routine_exercise_names)) + ')'
-            logger.debug(f"Using regex for predefined matching: {regex_pattern}")
-            matched_predefined_exercises = PredefinedExercise.objects.filter(name__iregex=regex_pattern)
-            matched_predefined_ids = list(matched_predefined_exercises.values_list('id', flat=True))
-            logger.debug(f"Matched PredefinedExercise IDs: {matched_predefined_ids}")
+            # DEBUG: List all predefined exercises for comparison
+            all_predefined = list(PredefinedExercise.objects.values_list('name', flat=True))
+            logger.info(f"Available predefined exercises: {all_predefined}")
+
+            # Use the improved matching logic from our model method
+            matched_predefined_ids = set()
+            for exercise_name in routine_exercise_names:
+                matches = PredefinedExercise.find_matches(exercise_name)
+                for match in matches:
+                    matched_predefined_ids.add(match.id)
+                    logger.info(f"Match found: '{exercise_name}' -> '{match.name}' (ID: {match.id})")
+                    
+            # Convert to list for the filter
+            matched_predefined_ids = list(matched_predefined_ids)
+            logger.info(f"All matched PredefinedExercise IDs: {matched_predefined_ids}")
 
             if not matched_predefined_ids:
                 logger.info("No exercises in the routine matched predefined exercises. No specific rules triggered.")
-                 # Decide if you want to return empty or potentially general advice here
+                # Decide if you want to return empty or potentially general advice here
                 return Response([], status=status.HTTP_200_OK)
 
             # 4. Find applicable ImprovementRules
             suggestions = []
             applied_rules = set() # Avoid duplicate suggestions for the same rule
+            
+            # List all rules for debugging
+            all_rules = ImprovementRule.objects.values('id', 'trigger_exercise__name', 'action_type', 'preference_focus')
+            logger.info(f"All available improvement rules: {list(all_rules)}")
 
             triggered_rules = ImprovementRule.objects.filter(
                 trigger_exercise_id__in=matched_predefined_ids,     # Rule triggered by an exercise in the routine
-                preference_focus__in=[user_focus, 'all']            # Rule matches user focus or is 'all'
+                preference_focus__in=valid_focus_values     # Rule matches user focus or is 'all'
             ).select_related('trigger_exercise', 'suggested_exercise') # Optimize query
-            logger.debug(f"Found {triggered_rules.count()} potential improvement rules matching criteria.")
+            
+            # TEMPORARY FIX: If we didn't find any rules matching the focus, try with ANY focus
+            if not triggered_rules.exists():
+                logger.warning(f"No rules found matching focus={valid_focus_values}. Trying with ANY focus.")
+                
+                # List all rules to see what's in the database
+                all_rules = ImprovementRule.objects.all()
+                logger.info(f"Total rules in database: {all_rules.count()}")
+                
+                for rule in all_rules:
+                    logger.info(f"Rule ID={rule.id}, Trigger={rule.trigger_exercise.name}, Focus={rule.preference_focus}, Action={rule.action_type}")
+                
+                # Try again with any focus
+                triggered_rules = ImprovementRule.objects.filter(
+                    trigger_exercise_id__in=matched_predefined_ids     # Just match on exercise
+                ).select_related('trigger_exercise', 'suggested_exercise')
+            
+            logger.info(f"Found {triggered_rules.count()} potential improvement rules matching criteria for focus={user_focus}")
+            
+            # Debug log each triggered rule
+            for rule in triggered_rules:
+                logger.info(f"Triggered Rule: ID={rule.id}, Trigger={rule.trigger_exercise.name}, Focus={rule.preference_focus}, Action={rule.action_type}")
 
             for rule in triggered_rules:
                  if rule.id not in applied_rules:
@@ -235,3 +282,40 @@ class AnalyzeRoutineView(APIView):
                 {"detail": "An internal server error occurred while analyzing the routine. Please contact support if the problem persists."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+# ---------- DIAGNOSTIC ENDPOINTS ----------
+class DiagnosticView(APIView):
+    """
+    GET /api/diagnostic/
+    Returns diagnostic information about the system
+    """
+    def get(self, request):
+        exercises = PredefinedExercise.objects.all()
+        exercise_count = exercises.count()
+        exercise_names = list(exercises.values_list('name', flat=True))
+        
+        rules = ImprovementRule.objects.all()
+        rule_count = rules.count()
+        focus_values = list(set(rules.values_list('preference_focus', flat=True)))
+        
+        rule_summary = []
+        for rule in rules:
+            rule_summary.append({
+                'id': rule.id,
+                'trigger': rule.trigger_exercise.name,
+                'action': rule.action_type,
+                'focus': rule.preference_focus,
+                'suggestion': rule.suggested_exercise.name if rule.suggested_exercise else None
+            })
+            
+        return Response({
+            'exercises': {
+                'count': exercise_count,
+                'names': exercise_names
+            },
+            'rules': {
+                'count': rule_count,
+                'focus_values': focus_values,
+                'summary': rule_summary
+            }
+        })
