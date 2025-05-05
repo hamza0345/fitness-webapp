@@ -143,7 +143,7 @@ export default function RegisterPage() {
 
                 {errors.form && <p className="text-sm text-red-500">{errors.form}</p>}
 
-                <Button className="w-full bg-green-600 hover:bg-green-700" disabled={isLoading}>
+                <Button className="w-full bg-primary hover:bg-primary/80 text-white" disabled={isLoading}>
                   {isLoading ? "Creating account..." : "Create account"}
                 </Button>
               </form>

@@ -17,7 +17,7 @@ import {
     VideoOff,
     Dumbbell,
     RefreshCw,
-    Square
+    Clock
 } from "lucide-react";
 import {
     PoseLandmarker,
@@ -338,9 +338,9 @@ export default function RepCounterPage() {
                             ctx.translate(canvas.width, 0); ctx.scale(-1, 1); // Undo mirror for text
                             
                             // Create a more prominent semi-transparent background with less opacity
-                            ctx.fillStyle = "rgba(255, 0, 0, 0.65)"; // Reduced opacity from 0.8 to 0.65
-                            const textWidth = 200; // Slightly wider
-                            const textHeight = 50; // Slightly taller
+                            ctx.fillStyle = "rgba(255, 0, 0, 0.75)"; // Increased opacity for better visibility
+                            const textWidth = 220; // Slightly wider
+                            const textHeight = 55; // Slightly taller
                             
                             // Position in the center of the screen
                             const warningX = canvas.width/2 - textWidth/2;
@@ -358,7 +358,7 @@ export default function RepCounterPage() {
                             
                             // Draw warning text
                             ctx.fillStyle = "#ffffff";
-                            ctx.font = "bold 28px Arial"; // Increased font size
+                            ctx.font = "bold 30px Arial"; // Increased font size
                             ctx.textAlign = "center";
                             ctx.fillText("SLOW DOWN", canvas.width/2, canvas.height/2 + 10);
                             
@@ -387,7 +387,7 @@ export default function RepCounterPage() {
         ctx.restore(); // Go back to non-mirrored drawing
         ctx.save();
         if (curlStage) {
-            ctx.fillStyle = curlStage === "up" ? "#f9a8d4" : "#fcd34d";
+            ctx.fillStyle = curlStage === "up" ? "#ec4899" : "#fcd34d";
             ctx.font = "bold 24px Arial"; ctx.textAlign = "left";
             ctx.fillText(curlStage.toUpperCase(), 20, canvas.height - 20);
         }
@@ -786,25 +786,25 @@ export default function RepCounterPage() {
                     {/* ... Statistics and feedback ... */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                           {/* Reps Card */}
-                          <Card className="shadow-sm bg-primary/10 border-2 border-primary/30">
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-sm font-medium text-primary flex items-center gap-2">
+                          <Card className="shadow-sm bg-primary/15 border-2 border-primary/40">
+                            <CardHeader className="pb-2 border-b border-primary/30">
+                              <CardTitle className="text-sm font-bold text-primary flex items-center gap-2">
                                 <RefreshCw className="h-4 w-4" /> REPS
                               </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                              <div className="text-5xl font-bold text-primary">{repCount}</div>
+                            <CardContent className="pt-3">
+                              <div className="text-6xl font-extrabold text-primary tracking-tight">{repCount}</div>
                             </CardContent>
                           </Card>
                           {/* Time Card */}
-                           <Card className="shadow-sm bg-accent/10 border-2 border-accent/30">
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-sm font-medium text-accent flex items-center gap-2">
-                                <Square className="h-4 w-4" /> TIME
+                           <Card className="shadow-sm bg-accent/20 border-2 border-accent/40">
+                            <CardHeader className="pb-2 border-b border-accent/30">
+                              <CardTitle className="text-sm font-bold text-accent-foreground flex items-center gap-2">
+                                <Clock className="h-4 w-4" /> TIME
                               </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                              <div className="text-5xl font-bold text-accent">{formatTime(exerciseTime)}</div>
+                            <CardContent className="pt-3">
+                              <div className="text-5xl font-bold text-foreground">{formatTime(exerciseTime)}</div>
                             </CardContent>
                           </Card>
                      </div>

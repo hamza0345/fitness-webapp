@@ -250,7 +250,7 @@ export default function Home() {
             </div>
             <div className="text-sm">
               <p>© 2023 BodyBlueprint. All rights reserved.</p>
-              <p className="mt-1">A university project demonstrating fitness technology.</p>
+              <p className="mt-1">by Hamza Ahmed</p>
             </div>
           </div>
         </div>
