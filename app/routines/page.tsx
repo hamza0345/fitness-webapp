@@ -20,7 +20,6 @@ import {
   PredefinedExercise, // Import type
 } from "@/lib/api"; // Adjust path as necessary
 
-/* ---------- helpers ---------- */
 
 // Use RoutineExercise type and ensure numeric fields are numbers or empty strings initially
 const emptyExercise = (): RoutineExercise => ({
@@ -33,7 +32,6 @@ const emptyExercise = (): RoutineExercise => ({
 // Deep copy utility (remains the same)
 const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
-/* ---------- component ---------- */
 
 export default function RoutinesPage() {
   // Auth Guard
@@ -82,7 +80,7 @@ export default function RoutinesPage() {
 
   }, [isAuthenticated]);
 
-  /* --- Form field handlers --- */
+  
   const handleAddExercise = () => {
     // Check if last exercise is empty before adding a new one
     const lastEx = draft.exercises[draft.exercises.length - 1];
@@ -121,7 +119,6 @@ export default function RoutinesPage() {
       setError(""); // Clear errors on reset/cancel
   }
 
-  /* --- Save Routine --- */
   const handleSave = async () => {
     if (!draft.name.trim()) {
         toast.error("Please enter a routine name.");
@@ -184,7 +181,7 @@ export default function RoutinesPage() {
     }
   };
 
-  /* --- Edit / Delete Routine --- */
+ 
   const startEdit = (routineToEdit: RoutineWithEx) => {
      // Prepare draft state, ensuring exercises have numeric values
      const draftExercises: RoutineExercise[] = routineToEdit.exercises.map(ex => ({
@@ -227,7 +224,7 @@ export default function RoutinesPage() {
     }
   };
 
-  // --- Render Logic ---
+ 
   if (!isAuthenticated) {
     return <div className="container mx-auto px-4 py-8 text-center">Authenticating...</div>;
   }

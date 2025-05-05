@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { WorkoutSession, getWorkoutSessions, addBicepCurlRepsToWorkout, WorkoutExercise, WorkoutSet } from '@/lib/api';
 import { toast } from 'sonner';
 
-// Define an interface for a found bicep curl set
+
 interface CurlSetInfo {
   exerciseIndex: number;
   setIndex: number;
@@ -50,11 +50,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   // Function to find the first incomplete curl exercise set
   const findIncompleteCurlSet = (): CurlSetInfo | null => {
-    console.log('findIncompleteCurlSet called, activeWorkout:', activeWorkout ? activeWorkout.name : 'None');
-    
     if (!activeWorkout) return null;
-    
-    console.log('Searching through', activeWorkout.exercises.length, 'exercises');
     
     // Search through exercises to find any bicep curl variations
     for (let exerciseIndex = 0; exerciseIndex < activeWorkout.exercises.length; exerciseIndex++) {
@@ -63,18 +59,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       // Check if the exercise name contains any curl-related keywords
       const isCurlExercise = /\b(bicep|curl|curls)\b/i.test(exercise.name);
       
-      console.log(`Exercise ${exerciseIndex}: ${exercise.name}, is curl exercise: ${isCurlExercise}`);
-      
       if (isCurlExercise) {
-        console.log(`Found curl exercise: ${exercise.name} with ${exercise.sets.length} sets`);
-        
         // Find the first incomplete set
         for (let setIndex = 0; setIndex < exercise.sets.length; setIndex++) {
           const set = exercise.sets[setIndex];
-          console.log(`Set ${setIndex+1} completed: ${set.completed ? 'Yes' : 'No'}`);
           
           if (!set.completed) {
-            console.log(`Found incomplete set: ${exercise.name}, Set ${set.set_number}`);
             return {
               exerciseIndex,
               setIndex,
@@ -83,27 +73,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             };
           }
         }
-        
-        console.log(`All sets completed for ${exercise.name}`);
       }
     }
     
-    console.log('No incomplete curl sets found');
     return null;
   };
 
   // Function to update reps for a specific set
   const updateSetReps = (exerciseIndex: number, setIndex: number, reps: number) => {
     if (!activeWorkout) {
-      console.log('updateSetReps: No active workout');
       return;
     }
     
     const newWorkout = { ...activeWorkout };
     const set = newWorkout.exercises[exerciseIndex].sets[setIndex];
-    const exercise = newWorkout.exercises[exerciseIndex];
-    
-    console.log(`updateSetReps: Updating ${exercise.name} Set ${set.set_number} reps from ${set.reps} to ${reps}`);
     
     // Update the reps count with the exact value provided
     set.reps = reps;
@@ -126,16 +109,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   // Function to add bicep curls to the active workout
   const addBicepCurls = async (curls: number) => {
-    console.log('addBicepCurls called with', curls, 'reps');
-    console.log('activeWorkout:', activeWorkout ? `${activeWorkout.name} (ID: ${activeWorkout.id})` : 'None');
-    
     // First check if there's an active workout with an incomplete curl set
     const incompleteCurlSet = findIncompleteCurlSet();
-    console.log('incompleteCurlSet found:', incompleteCurlSet ? 
-      `${incompleteCurlSet.exercise.name}, Set ${incompleteCurlSet.set.set_number}` : 'None');
     
     if (incompleteCurlSet) {
-      console.log('Updating incomplete set with rep count:', curls);
       // Update the incomplete set with the tracked rep count
       updateSetReps(incompleteCurlSet.exerciseIndex, incompleteCurlSet.setIndex, curls);
       markSetCompleted(incompleteCurlSet.exerciseIndex, incompleteCurlSet.setIndex);
@@ -146,15 +123,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     
     // If no active workout with incomplete curl set, use the API to add to existing workout
     if (!activeWorkout || !activeWorkout.id) {
-      console.log('No active workout with curl exercises to add reps to');
       return;
     }
 
     try {
-      console.log('Using API to add bicep curls to workout ID:', activeWorkout.id);
       setLoading(true);
       const updatedWorkout = await addBicepCurlRepsToWorkout(activeWorkout.id, curls);
-      console.log('API call successful, updated workout received');
       
       // Update the active workout and workout sessions
       setActiveWorkout(updatedWorkout);

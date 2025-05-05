@@ -53,7 +53,7 @@ export default function RepCounterPage() {
     const { activeWorkout, addBicepCurls, findIncompleteCurlSet, updateSetReps, markSetCompleted } = useWorkout();
     const curlSet = findIncompleteCurlSet();
     
-    /* ---------- state ---------- */
+  
     const [activeTab, setActiveTab] = useState("live");
     const [isCameraStarted, setIsCameraStarted] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -70,7 +70,7 @@ export default function RepCounterPage() {
     const [previousCurlStage, setPreviousCurlStage] = useState<"down" | "up" | null>(null);
     const [warningTimer, setWarningTimer] = useState<number | null>(null);
     
-    /* ---------- refs ---------- */
+ 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -83,7 +83,7 @@ export default function RepCounterPage() {
     // Store the target set info when component loads
     const targetSetRef = useRef<CurlSetInfo | null>(null);
     
-    /* ---------- load model on mount ---------- */
+  
     useEffect(() => {
         console.log("useEffect: Initializing...");
         const createPoseLandmarker = async () => {
@@ -202,7 +202,6 @@ export default function RepCounterPage() {
         };
     }, [warningTimer]);
 
-    /* ---------- helpers ---------- */
     const calculateAngle = useCallback((a: Point, b: Point, c: Point): number => {
         // ... (calculateAngle logic remains the same) ...
         const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -442,7 +441,7 @@ export default function RepCounterPage() {
     }, [isProcessing, predictWebcam]); // Rerun when isProcessing or predictWebcam changes
 
 
-    /* ---------- timer controls ---------- */
+    
     const startTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => setExerciseTime(prev => prev + 1), 1000);
@@ -674,7 +673,7 @@ export default function RepCounterPage() {
         return `${minutes}:${seconds}`;
     };
 
-    /* ---------- JSX ---------- */
+  
     return (
         <div className="container mx-auto p-4 md:p-8 max-w-7xl">
             {/* Header */}
@@ -778,9 +777,7 @@ export default function RepCounterPage() {
                                  <Button variant="outline" onClick={resetCounterState} className="shadow"><RotateCcw className="mr-2 h-4 w-4" /> Reset</Button>
                                  <Button variant="destructive" onClick={() => stopProcessingAndCamera()} className="shadow"><VideoOff className="mr-2 h-4 w-4" /> Stop Camera</Button>
                              </>
-                         ) : (
-                            !isLoadingModel && <Button onClick={startCameraAndProcessing} className="bg-primary hover:bg-primary/80 text-primary-foreground font-bold py-2 px-4 shadow-md" disabled={isLoadingModel || !!errorMessage}><Camera className="mr-2 h-4 w-4" /> Start Camera</Button>
-                         )}
+                         ) : null}
                      </div>
 
                     {/* ... Statistics and feedback ... */}

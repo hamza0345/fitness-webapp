@@ -81,7 +81,7 @@ export default function TrackerPage() {
     foods: FoodItem[];
   }[]>([])
 
-  // --- Fetch initial data ---
+  
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -98,7 +98,7 @@ export default function TrackerPage() {
         setLoading(prev => ({ ...prev, routines: false }));
       }
 
-      // Workouts are now handled by the WorkoutContext
+    
 
       // Fetch Nutrition
       try {
@@ -175,7 +175,7 @@ export default function TrackerPage() {
     setNutritionHistory(history);
   };
 
-  // --- Workout functions ---
+  // Workout functions 
   const startWorkout = (routine: RoutineWithEx) => {
     if (!routine || !routine.exercises) return;
     const workout: WorkoutSession = {
@@ -491,7 +491,7 @@ export default function TrackerPage() {
    };
 
 
-  // --- Render Logic ---
+  // Render Logic 
   if (!isAuthenticated) {
     // Optional: Render a loading state or null while redirecting
     return <div className="container mx-auto px-4 py-8 text-center">Loading...</div>;

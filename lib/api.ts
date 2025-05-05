@@ -1,12 +1,9 @@
-// lib/api.ts
-/* ------------------------------------------------------------------ */
-/* lib/api.ts (Final Polished Version)                               */
-/* ------------------------------------------------------------------ */
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
 /* ------------------------------------------------------------------ */
-/* 🔸 Small helpers                                                    */
+/* Small helpersss                                                   */
 /* ------------------------------------------------------------------ */
 
 export function getToken() {
@@ -30,7 +27,7 @@ export function getUserEmail(): string | null {
 }
 
 /* ------------------------------------------------------------------ */
-/* 🔸 AUTH                                                            */
+/* AUTH                                                            */
 /* ------------------------------------------------------------------ */
 
 export async function login(email: string, password: string) {
@@ -87,7 +84,7 @@ export function logout() {
 }
 
 /* ------------------------------------------------------------------ */
-/* 🔸 TYPES                                                            */
+/*  TYPES                                                            */
 /* ------------------------------------------------------------------ */
 
 // Exercise within a Routine definition
@@ -181,7 +178,7 @@ export interface ImprovementSuggestion {
 
 
 /* ------------------------------------------------------------------ */
-/* 🔸 ROUTINES (full version with exercises)                          */
+/* ROUTINES (full version with exercises)                          */
 /* ------------------------------------------------------------------ */
 
 export async function getRoutines(): Promise<RoutineWithEx[]> {
@@ -279,7 +276,7 @@ export async function deleteRoutine(id: number): Promise<void> {
 
 
 /* ------------------------------------------------------------------ */
-/* 🔸 WORKOUT SESSIONS                                                */
+/*  WORKOUT SESSIONS                                                */
 /* ------------------------------------------------------------------ */
 
 export async function getWorkoutSessions(): Promise<WorkoutSession[]> {
@@ -465,7 +462,7 @@ export async function addBicepCurlRepsToWorkout(workoutId: number, reps: number)
 }
 
 /* ------------------------------------------------------------------ */
-/* 🔸 NUTRITION TRACKING                                              */
+/*  NUTRITION TRACKING                                              */
 /* ------------------------------------------------------------------ */
 
 export async function getNutritionEntries(): Promise<NutritionEntry[]> {
@@ -562,7 +559,7 @@ export async function deleteNutritionEntry(id: number): Promise<void> {
 
 
 /* ------------------------------------------------------------------ */
-/* 🔸 IMPROVEMENT FEATURE API                                         */
+/*  IMPROVEMENT FEATURE API                                         */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -622,19 +619,3 @@ export async function analyzeRoutine(routineId: number, preferences: { focus: st
 
 
 
-/* ------------------------------------------------------------------ */
-/* 🔸 (Legacy helpers, optional: only if old pages use them)         */
-/* ------------------------------------------------------------------ */
-
-// Note: These simplified versions might cause issues if exercises are expected.
-// It's better to use createRoutineFull/updateRoutineFull directly.
-// export async function createRoutine(name: string, description: string) {
-//   return createRoutineFull({ name, description, exercises: [] });
-// }
-
-// export async function updateRoutine(id: number, name: string, description: string) {
-//   // Fetch existing exercises first if you need to preserve them?
-//   // This simplified update will WIPE existing exercises. Be careful.
-//   console.warn("Using simplified updateRoutine - this will remove existing exercises unless handled properly.");
-//   return updateRoutineFull(id, { name, description, exercises: [] });
-// }

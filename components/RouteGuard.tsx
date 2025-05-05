@@ -35,7 +35,6 @@ export default function RouteGuard({ children }: RouteGuardProps) {
     
     // If the route needs auth and user is not logged in, redirect to register
     if (needsAuth && !isLoggedIn) {
-      console.log("Redirecting to register - not authenticated");
       router.push('/register');
     }
   }, [isLoggedIn, pathname, router]);

@@ -80,7 +80,6 @@ class WorkoutSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return WorkoutSession.objects.filter(user=self.request.user)
 
 
-# ----------  NUTRITION ENTRIES ----------
 class NutritionEntryListCreateView(generics.ListCreateAPIView):
     """
     GET /api/nutrition/ - List all nutrition entries
@@ -146,7 +145,7 @@ class AnalyzeRoutineView(APIView):
         logger.debug(f"Request data received: {request.data}")
 
         try:
-            # 1. Fetch the routine
+            #  Fetch the routine
             routine = get_object_or_404(Routine, pk=routine_id, user=request.user)
             logger.info(f"Successfully fetched routine '{routine.name}' (ID: {routine.id})")
 
@@ -168,8 +167,8 @@ class AnalyzeRoutineView(APIView):
             valid_focus_values = focus_mapping.get(user_focus, ['hypertrophy', 'powerlifting', 'all'])
             logger.info(f"Valid focus values to match in DB: {valid_focus_values}")
 
-            # 2. Get exercises from the user's routine
-            # Access related exercises via the related_name 'exercises' defined in Exercise model
+            # Get exercises from the user's routine
+            
             routine_exercises = routine.exercises.all()
             routine_exercise_names = list(routine_exercises.values_list('name', flat=True))
             logger.info(f"Routine contains exercises: {routine_exercise_names}")
@@ -182,7 +181,7 @@ class AnalyzeRoutineView(APIView):
             all_predefined = list(PredefinedExercise.objects.values_list('name', flat=True))
             logger.info(f"Available predefined exercises: {all_predefined}")
 
-            # Use the improved matching logic from our model method
+           
             matched_predefined_ids = set()
             for exercise_name in routine_exercise_names:
                 matches = PredefinedExercise.find_matches(exercise_name)

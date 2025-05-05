@@ -5,13 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select
-import { Label } from "@/components/ui/label"; // Import Label
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
+import { Label } from "@/components/ui/label"; 
 import { Dumbbell, ArrowLeft, CheckCircle, AlertCircle, ArrowRight, Beaker, RefreshCw, Info } from "lucide-react";
-import { getRoutines, analyzeRoutine, updateRoutineFull, RoutineWithEx, RoutineExercise, ImprovementSuggestion } from "@/lib/api"; // Import API functions and types
-import { useToast } from "@/components/ui/use-toast"; // Import useToast
+import { getRoutines, analyzeRoutine, updateRoutineFull, RoutineWithEx, RoutineExercise, ImprovementSuggestion } from "@/lib/api"; 
+import { useToast } from "@/components/ui/use-toast"; 
 
-// Define preference options
+
 const FOCUS_OPTIONS = [
   { value: "hypertrophy", label: "Muscle Growth (Hypertrophy)" },
   { value: "powerlifting", label: "Strength & Power" }
@@ -56,7 +56,7 @@ export default function ImproveProgramPage() {
     };
 
     fetchUserRoutines();
-  }, [toast]); // Add toast to dependency array
+  }, [toast]); 
 
   const handleSelectRoutine = (routine: RoutineWithEx) => {
     setSelectedRoutine(routine);
@@ -72,7 +72,7 @@ export default function ImproveProgramPage() {
      setAnalysisError(null);
   };
 
-  // Function to trigger analysis
+
   const runAnalysis = async () => {
     if (!selectedRoutine) return;
 
@@ -82,7 +82,7 @@ export default function ImproveProgramPage() {
     setUpdatedExercises([]); // Reset applied status on new analysis
 
     try {
-      const results = await analyzeRoutine(selectedRoutine.id!, preferences); // Pass selected routine ID and preferences
+      const results = await analyzeRoutine(selectedRoutine.id!, preferences); 
       setAnalysisResults(results);
        if (results.length === 0) {
            toast({

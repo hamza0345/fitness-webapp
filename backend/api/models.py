@@ -148,8 +148,8 @@ class ImprovementRule(models.Model):
     PREFERENCE_CHOICES = [
         ('hypertrophy', 'Hypertrophy'),
         ('powerlifting', 'Powerlifting'),
-        # ('general_fitness', 'General Fitness'), # Keep commented/removed if desired
-        # ('injury_prevention', 'Injury Prevention'), # Keep commented/removed if desired
+        # ('general_fitness', 'General Fitness'), 
+        # ('injury_prevention', 'Injury Prevention'), 
         ('all', 'All'),
     ]
 
